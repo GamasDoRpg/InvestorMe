@@ -12,6 +12,69 @@ InvestorMe is currently in an early stage of development. The architecture and f
 
 ---
 
+## Desktop interface preview (v0.1)
+
+The repository now includes a runnable **Electron desktop interface**, inspired by the eight mockups in `assets/FirstInterfaceModel`. The interface is in Brazilian Portuguese and uses a dark navy/green theme, with light and system themes available.
+
+![InvestorMe desktop interface preview](assets/desktop-preview.png)
+
+### Run on Windows
+
+Install Node.js 22 LTS or later, then run from the repository root:
+
+```powershell
+npm ci
+npm start
+```
+
+InvestorMe opens as a desktop window with minimize, maximize/restore, and close controls. The minimum window size is 1024 × 700; 1480 × 960 or larger is recommended.
+
+### What works in this preview
+
+- Nine pages: overview, portfolio, markets, strategies, models, backtests, risk, alerts, and settings.
+- Add, edit, and delete Brazilian equity positions; edit cash; calculate totals using static demo prices.
+- Filter example assets, inspect details, manage a watchlist, and search pages/assets with `Ctrl+K`.
+- Create/edit/delete strategies, change their local active/paused state, and configure position limits.
+- Create/edit/delete model configurations and simulate the training flow.
+- Configure backtest dates, validate date ranges, simulate the execution flow, and inspect experiment history.
+- Configure risk limits and calculate a simplified uniform-price-drop scenario.
+- Create/edit/delete alert rules, toggle them, filter unread rules, and mark all as read.
+- Save a local display name, notification preferences, theme, and density.
+- Persist the workspace locally, export it to JSON through a native save dialog, and restore the initial demo after confirmation.
+
+All prices, charts, and market changes are **demonstrative**. Charts are illustrations, not financial outputs. Model training, backtesting, alert monitoring, brokerage connections, authentication, and live trading are **not implemented**. The active strategy switch only changes its saved local state. Exported JSON is a snapshot; importing is not implemented yet.
+
+### Build for Windows
+
+```powershell
+npm run dist:win
+```
+
+The `release/` directory receives an NSIS installer and a portable executable. Builds are unsigned. The **Desktop preview** GitHub Actions workflow also runs the interaction tests and uploads `InvestorMe-Windows-x64` artifacts for successful builds; it does not publish a GitHub Release.
+
+### Development and verification
+
+```powershell
+npm run check
+npm test
+npm run preview
+```
+
+Tests drive the actual Electron renderer with Playwright using an isolated temporary user profile. On Linux, they use Chromium's headless Ozone backend. A root test container additionally requires `--no-sandbox`; normal application startup never sets this flag. The browser preview is served only on `http://127.0.0.1:4173` and omits native window controls. Desktop and browser previews have separate local storage.
+
+Source layout:
+
+```text
+desktop/       Electron main process, restricted preload bridge, preview server, app icon
+ui/            Local HTML, CSS, JavaScript interface and demo workspace
+tests/         Electron interaction tests
+.github/       Test and Windows packaging workflow
+```
+
+The renderer runs with Node integration disabled, context isolation and sandbox enabled, a restrictive Content Security Policy, and no external navigation. The preload exposes only window controls and a validated JSON export operation.
+
+---
+
 ## Vision
 
 Most investment tools specialize in only one part of the workflow: charting, portfolio tracking, screening, backtesting, or quantitative research.
@@ -706,7 +769,7 @@ Anyone using the software is responsible for independently evaluating investment
 
 **Early development / research stage.**
 
-The repository currently contains the initial project documentation. Implementation details, technology choices, APIs, and architecture may change substantially as development progresses.
+The repository contains the initial project documentation and a functional desktop UI preview with local demo data. The financial, machine-learning, and trading engines described in this roadmap are not implemented. APIs and architecture may change as development progresses.
 
 ---
 

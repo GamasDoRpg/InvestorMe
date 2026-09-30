@@ -1,0 +1,38 @@
+name: Desktop preview
+on:
+  push:
+    branches: [main, feat/desktop-interface]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  interface-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+  windows:
+    needs: interface-tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run dist:win -- --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: InvestorMe-Windows-x64
+          path: release/*.exe
+          if-no-files-found: error

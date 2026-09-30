@@ -1,0 +1,46 @@
+{
+  "name": "investorme",
+  "version": "0.1.0",
+  "private": true,
+  "description": "InvestorMe desktop interface preview",
+  "author": "GamasDoRpg",
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "preview": "node desktop/preview.cjs",
+    "check": "node --check ui/app.js && node --check desktop/main.cjs && node --check desktop/preload.cjs",
+    "test": "node --test tests/ui.test.cjs",
+    "dist:win": "electron-builder --win nsis portable"
+  },
+  "devDependencies": {
+    "electron": "^40.0.0",
+    "electron-builder": "^26.0.12",
+    "playwright": "1.58.2"
+  },
+  "build": {
+    "appId": "com.investorme.desktop",
+    "productName": "InvestorMe",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "desktop/main.cjs",
+      "desktop/preload.cjs",
+      "ui/**/*",
+      "package.json",
+      "desktop/icon.png"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "desktop/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}
