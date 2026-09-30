@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>InvestorMe</title>
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="titlebar">
+      <div class="titlebrand">
+        <span class="brandmark">▥</span> InvestorMe
+        <span class="title-separator">/</span
+        ><span class="title-label">Workspace pessoal</span>
+      </div>
+      <span class="preview-label">DESKTOP PREVIEW · 0.1</span>
+      <div class="window-controls" id="window-controls">
+        <button data-window="minimize" aria-label="Minimizar">−</button
+        ><button data-window="maximize" aria-label="Maximizar">□</button
+        ><button data-window="close" aria-label="Fechar">×</button>
+      </div>
+    </div>
+    <div class="shell">
+      <aside class="sidebar">
+        <a class="logo" href="#overview"
+          ><span class="brand-icon">▥</span>Investor<span>Me</span></a
+        >
+        <div class="workspace">
+          <span class="workspace-icon">G</span>
+          <div>Meu workspace<small>Pesquisa & investimentos</small></div>
+          <span class="demo-dot"></span>
+        </div>
+        <div class="nav-label">WORKSPACE</div>
+        <nav id="navigation" aria-label="Navegação principal"></nav>
+        <div class="sidebar-bottom">
+          <div class="sandbox-card">
+            <span class="demo-dot"></span> Ambiente demonstrativo
+            <p>Explore suas ideias.<br />Todos os dados são fictícios.</p>
+          </div>
+          <button class="profile" data-action="profile">
+            <span class="avatar">G</span
+            ><span id="profile-name"
+              >Meu perfil<small>Workspace local</small></span
+            ><span>⚙</span>
+          </button>
+        </div>
+      </aside>
+      <div class="main-shell">
+        <header class="topbar">
+          <div class="breadcrumb">
+            Workspace <span>/</span>
+            <strong id="breadcrumb">Visão geral</strong>
+          </div>
+          <div class="top-actions">
+            <button class="search-button" data-action="search">
+              <span>⌕</span> Buscar ativos ou páginas <kbd>Ctrl K</kbd></button
+            ><span class="demo-badge"
+              ><span class="demo-dot"></span> Modo demo</span
+            ><button
+              class="icon-button notification-button"
+              data-action="notifications"
+              aria-label="Abrir alertas"
+            >
+              ♧<span id="notification-dot"></span>
+            </button>
+          </div>
+        </header>
+        <main id="main" tabindex="-1"></main>
+        <footer>
+          <span
+            ><span class="demo-dot"></span> Workspace salvo neste
+            dispositivo</span
+          ><span
+            >InvestorMe · Interface preview
+            <span class="footer-divider">|</span> Nenhuma conexão com
+            corretoras</span
+          >
+        </footer>
+      </div>
+    </div>
+    <dialog id="modal"><div id="modal-content"></div></dialog>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
