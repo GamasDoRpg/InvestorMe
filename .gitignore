@@ -2,3 +2,7 @@ node_modules/
 release/
 test-results/
 *.log
+
+.env
+.env.*
+!.env.example
