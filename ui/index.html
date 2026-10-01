@@ -42,7 +42,11 @@
             <span class="demo-dot"></span> Ambiente demonstrativo
             <p>Explore suas ideias.<br />Todos os dados são fictícios.</p>
           </div>
-          <button class="profile" data-action="profile">
+          <button
+            class="profile"
+            data-action="go-settings"
+            aria-label="Abrir configurações"
+          >
             <span class="avatar">G</span
             ><span id="profile-name"
               >Meu perfil<small>Workspace local</small></span
@@ -85,6 +89,7 @@
     </div>
     <dialog id="modal"><div id="modal-content"></div></dialog>
     <div id="toast" role="status" aria-live="polite"></div>
+    <script src="research.js"></script>
     <script src="layouts.js"></script>
     <script src="app.js"></script>
   </body>
