@@ -1,0 +1,141 @@
+import { Asset } from "../core/index.mjs";
+import { MarketDataService } from "../core/market-data/MarketDataService.mjs";
+import {
+  MarketDataError,
+  normalizeError,
+} from "../core/market-data/errors.mjs";
+import {
+  validateAssets,
+  validateHistory,
+  validateQuery,
+} from "../core/market-data/contract.mjs";
+import { MockMarketDataProvider } from "../providers/MockMarketDataProvider.mjs";
+import { TwelveDataProvider } from "../providers/TwelveDataProvider.mjs";
+const baseInfo = {
+  provider: "mock",
+  demo: true,
+  label: "Mock Provider · dados demonstrativos",
+  notice: null,
+};
+export function createMarketBackend(env = {}, dependencies = {}) {
+  const selected = env.MARKET_DATA_PROVIDER || "mock";
+  const logger =
+    dependencies.logger ||
+    (env.MARKET_DATA_DEBUG === "1"
+      ? (event) => console.info("[market-data]", JSON.stringify(event))
+      : () => {});
+  let provider, info;
+  if (
+    selected === "twelve" &&
+    typeof env.TWELVE_DATA_API_KEY === "string" &&
+    env.TWELVE_DATA_API_KEY.trim()
+  ) {
+    provider = new TwelveDataProvider({
+      ...dependencies,
+      apiKey: env.TWELVE_DATA_API_KEY,
+    });
+    info = {
+      provider: "twelve",
+      demo: false,
+      label: "Twelve Data · B3: fim de dia; EUA: conforme plano",
+      notice: null,
+    };
+  } else {
+    provider = new MockMarketDataProvider();
+    info = {
+      ...baseInfo,
+      notice:
+        selected === "twelve"
+          ? "AUTH_ERROR: chave ausente; modo demonstrativo ativo."
+          : selected !== "mock"
+            ? "INVALID_REQUEST: provider desconhecido; modo demonstrativo ativo."
+            : null,
+    };
+  }
+  try {
+    logger({ provider: info.provider, status: "selected" });
+  } catch {}
+  const service = new MarketDataService(provider, {
+    logger,
+    ...dependencies.serviceOptions,
+  });
+  return { service, info: Object.freeze(info) };
+}
+function assetFromWire(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new MarketDataError("INVALID_REQUEST");
+  const fields = [
+    "id",
+    "symbol",
+    "exchange",
+    "name",
+    "currency",
+    "assetType",
+    "sector",
+    "market",
+    "country",
+  ];
+  if (
+    Object.keys(value).some((key) => !fields.includes(key)) ||
+    Object.values(value).some((v) => typeof v !== "string" || v.length > 200)
+  )
+    throw new MarketDataError("INVALID_REQUEST");
+  try {
+    return new Asset(value);
+  } catch {
+    throw new MarketDataError("INVALID_REQUEST");
+  }
+}
+// Main-only IPC boundary. No URLs, headers, configuration or credentials accepted.
+export function createMarketHandler(backend, trusted) {
+  let active = 0;
+  return async (event, request) => {
+    try {
+      if (
+        !trusted(event) ||
+        !request ||
+        typeof request !== "object" ||
+        Array.isArray(request) ||
+        Object.keys(request).some((k) => !["method", "args"].includes(k)) ||
+        !Array.isArray(request.args)
+      )
+        throw new MarketDataError("INVALID_REQUEST");
+      if (active >= 8)
+        throw new MarketDataError("RATE_LIMIT", { retryAfterMs: 1000 });
+      const { method, args } = request;
+      if (method === "info" && args.length === 0)
+        return { ok: true, data: backend.info };
+      const arity = {
+        getQuote: 1,
+        getQuotes: 1,
+        getHistory: 2,
+        searchAssets: 1,
+      };
+      if (!Object.hasOwn(arity, method) || args.length !== arity[method])
+        throw new MarketDataError("INVALID_REQUEST");
+      let input;
+      if (method === "searchAssets") input = [validateQuery(args[0])];
+      else if (method === "getQuotes") {
+        if (!Array.isArray(args[0]) || args[0].length > 50)
+          throw new MarketDataError("INVALID_REQUEST");
+        input = [validateAssets(args[0].map(assetFromWire))];
+      } else
+        input =
+          method === "getQuote"
+            ? [assetFromWire(args[0])]
+            : [assetFromWire(args[0]), validateHistory(args[1])];
+      active++;
+      try {
+        const data = await backend.service[method](...input);
+        return {
+          ok: true,
+          data: data instanceof Map ? [...data.values()] : data,
+        };
+      } finally {
+        active--;
+      }
+    } catch (error) {
+      return { ok: false, error: normalizeError(error).toJSON() };
+    }
+  };
+}
