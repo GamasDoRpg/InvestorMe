@@ -408,3 +408,92 @@ test("Script editor saves inert code and strategy/model associations", async () 
   assert.equal(await page.locator(".script-item").count(), 1);
   assert.deepEqual(errors, []);
 });
+
+test("Financial core rejects invalid form values and preserves the legacy workspace", async () => {
+  await navigate("portfolio");
+  const before = await page.evaluate(() => localStorage.getItem("investorme.workspace.v1"));
+  await click("edit-holding");
+  await fill("quantity", "-10");
+  // Bypass browser validation to exercise domain validation at the save boundary.
+  await page.locator('form[data-form="holding"]').evaluate(f =>
+    f.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+  assert.match(await page.locator(".form-error").textContent(), /Posição inválida/);
+  assert.equal(await page.evaluate(() => localStorage.getItem("investorme.workspace.v1")), before);
+  await click("close-modal");
+  await click("cash");
+  await fill("cash", "-1");
+  await page.locator('form[data-form="cash"]').evaluate(f =>
+    f.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+  assert.match(await page.locator(".form-error").textContent(), /Caixa inválido/);
+  await click("close-modal");
+  await page.reload();
+  await page.waitForSelector("h1");
+  assert.equal(await page.evaluate(() => localStorage.getItem("investorme.workspace.v1")), before);
+  const summary = await page.evaluate(() => window.InvestorMeFinance.evaluate(JSON.parse(localStorage.getItem("investorme.workspace.v1"))));
+  const persisted = JSON.parse(before);
+  assert.equal(summary.positions.length, persisted.holdings.length);
+  assert.ok(persisted.scripts[0].content.includes("EXECUTED"));
+  assert.ok(persisted.layouts);
+  assert.deepEqual(errors, []);
+});
+
+test("Invalid saved financial data remains exportable and repairable without reset", async () => {
+  const original = await page.evaluate(() => localStorage.getItem("investorme.workspace.v1"));
+  try {
+    const invalid = JSON.parse(original);
+    invalid.holdings[0].quantity = -10;
+    await page.evaluate(value => localStorage.setItem("investorme.workspace.v1", value), JSON.stringify(invalid));
+    await page.reload();
+    await page.waitForSelector('[role="alert"]');
+    assert.match(await page.locator("h1").textContent(), /Dados financeiros inválidos/);
+    assert.equal(await page.evaluate(() => localStorage.getItem("investorme.workspace.v1")), JSON.stringify(invalid));
+    const exportPath = path.join(userData, "invalid-export.json");
+    await app.evaluate(({ dialog }, filePath) => {
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+    }, exportPath);
+    await page.locator('main [data-action="export"]').click();
+    await page.waitForFunction(() => document.querySelector("#toast").textContent === "Workspace exportado.");
+    assert.deepEqual(JSON.parse(await readFile(exportPath, "utf8")), invalid);
+    await click("edit-holding");
+    await fill("quantity", "300");
+    await save();
+    assert.equal(await page.locator("h1").textContent(), "Carteira");
+    assert.deepEqual(errors, []);
+  } finally {
+    await page.evaluate(value => localStorage.setItem("investorme.workspace.v1", value), original);
+    await page.reload();
+    await page.waitForSelector("h1");
+  }
+});
+
+test("Browser preview loads core modules under the existing CSP", async () => {
+  const { spawn } = require("node:child_process");
+  const server = spawn(process.execPath, ["desktop/preview.cjs"], {
+    env: { ...process.env, PORT: "4179" }, stdio: ["ignore", "pipe", "pipe"],
+  });
+  const originalUrl = page.url();
+  try {
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("Preview startup timeout")), 10000);
+      server.once("error", reject);
+      server.once("exit", code => { clearTimeout(timer); reject(new Error(`Preview exited: ${code}`)); });
+      server.stdout.once("data", () => { clearTimeout(timer); resolve(); });
+    });
+    const response = await fetch("http://127.0.0.1:4179/core/index.mjs");
+    assert.match(response.headers.get("content-type"), /javascript/);
+    assert.match(await response.text(), /Portfolio/);
+    assert.equal((await fetch("http://127.0.0.1:4179/package.json")).status, 404);
+    await app.evaluate(async ({ BrowserWindow }) => {
+      await BrowserWindow.getAllWindows()[0].loadURL("http://127.0.0.1:4179/");
+    });
+    await page.waitForSelector("h1");
+    assert.equal(await page.locator("h1").textContent(), "Visão geral");
+    assert.match(await page.locator(".stats").textContent(), /41\.655/);
+    assert.deepEqual(errors, []);
+  } finally {
+    await app.evaluate(async ({ BrowserWindow }, url) => {
+      await BrowserWindow.getAllWindows()[0].loadURL(url);
+    }, originalUrl);
+    server.kill();
+  }
+});

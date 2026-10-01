@@ -1,13 +1,17 @@
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
-const root = path.resolve(__dirname, "../ui");
+const uiRoot = path.resolve(__dirname, "../ui");
+const coreRoot = path.resolve(__dirname, "../core");
 http
   .createServer((req, res) => {
     const pathname = new URL(req.url, "http://localhost").pathname;
+    const isCore = pathname.startsWith("/core/");
+    const root = isCore ? coreRoot : uiRoot;
+    const resource = isCore ? pathname.slice(5) : pathname;
     const file = path.resolve(
       root,
-      "." + (pathname === "/" ? "/index.html" : pathname),
+      "." + (resource === "/" ? "/index.html" : resource),
     );
     if (!file.startsWith(root + path.sep)) {
       res.writeHead(403).end();
@@ -20,9 +24,12 @@ http
       }
       res.setHeader(
         "Content-Type",
-        { ".html": "text/html", ".css": "text/css", ".js": "text/javascript" }[
-          path.extname(file)
-        ] || "application/octet-stream",
+        {
+          ".html": "text/html",
+          ".css": "text/css",
+          ".js": "text/javascript",
+          ".mjs": "text/javascript",
+        }[path.extname(file)] || "application/octet-stream",
       );
       res.end(data);
     });

@@ -90,11 +90,43 @@ Source layout:
 ```text
 desktop/       Electron main process, restricted preload bridge, preview server, app icon
 ui/            Local HTML, CSS, JavaScript interface and demo workspace
-tests/         Electron interaction tests
+core/          Independent financial domain (native ES modules)
+tests/         Core unit tests and Electron/browser interaction tests
+scripts/       Cross-platform syntax validation
 .github/       Test and Windows packaging workflow
 ```
 
 The renderer runs with Node integration disabled, context isolation and sandbox enabled, a restrictive Content Security Policy, and no external navigation. The preload exposes only window controls and a validated JSON export operation.
+
+---
+
+## Financial core — technical stage 1
+
+Implemented: independent `Asset`, `Quote`, `Candle`, `Position` and `Portfolio` models. The core imports no DOM, Electron, storage or UI APIs and can be consumed directly from Node or a browser through `core/index.mjs`.
+
+| Layer | Responsibility |
+| --- | --- |
+| `core/market/` | Immutable asset identity and market metadata; timestamped quotes with derived changes; validated provider-independent OHLCV candles. |
+| `core/portfolio/` | Immutable positions and portfolios; invested capital, market value, cash, equity, unrealized P/L and allocation. |
+| `core/common/` | Domain errors, input validation and shared decimal arithmetic. |
+| `ui/demo-market.mjs` | Explicitly fictitious assets and quotes, with a fixed illustrative timestamp; no network access. |
+| `ui/finance.mjs` | Converts legacy workspace records into domain objects and exposes a presentation facade for the current UI. |
+| `ui/app.js` | Rendering, interactions, formatting and localStorage persistence. Basic portfolio calculations delegate to the core. |
+| `desktop/` | Electron lifecycle, restricted native bridge and browser preview; no financial rules. |
+
+**Module compatibility.** The core uses native `.mjs` ES modules, without a bundler, framework, dependencies or a repository-wide module conversion. The Electron process remains CommonJS. `ui/bootstrap.mjs` loads the financial adapter first, exposes one read-only `window.InvestorMeFinance` bridge, then loads the existing classic `app.js`. This preserves the shared lexical scope used by `research.js` and `layouts.js`. The core itself creates no globals. The preview serves only UI/core files with the correct module MIME type; packaging includes `core/**/*.mjs`. The existing CSP, renderer sandbox and disabled Node integration are unchanged.
+
+**Domain contracts.** Assets require ID, symbol, exchange, name, currency and asset type; sector, market and country are optional. IDs distinguish exchanges; tickers alone are not portfolio quote keys. Asset types are extensible, including equities, ETFs and indices. Quotes accept epoch milliseconds or an ISO timestamp with a timezone and calculate changes from an optional previous close. Candles require a timestamp, interval and finite nonnegative OHLCV values, with coherent high/low bounds. Positions accept nonnegative quantities (including fractions) and average costs. Invalid inputs raise `DomainError`; validated objects and position arrays are immutable.
+
+`Portfolio.evaluate(quotes)` accepts a `Map` keyed by asset ID. It returns invested capital, market value, total equity (positions plus cash), unrealized P/L and per-position results. Allocation is a percentage of total equity **including cash**; `investedAllocation` is the percentage of position market value **excluding cash**, preserving the existing risk-page convention. Empty portfolios return zero values and zero allocations. Unknown quotes produce `null` valuation-dependent results rather than pretending the asset is worth zero; zero-quantity positions are worth zero without a quote. Returns on a zero cost basis and changes against a zero previous close are `null` because the percentage is undefined.
+
+**Currencies and precision.** Core models support currencies independently of market/country. Each portfolio currently accepts only positions in its base currency; mixing currencies throws an explicit conversion-required error. No FX rates are assumed. The UI retains its existing BRL-only portfolio and USD market examples. Addition, subtraction and multiplication use decimal representations with integer arithmetic internally, avoiding common artifacts such as `0.1 + 0.2` without rounding intermediate values to cents. Inputs/outputs remain JavaScript Numbers and percentages use floating-point division; this is not an arbitrary-precision accounting ledger. Overflow/underflow in the decimal operations is rejected. Only presentation formats values to two decimal places.
+
+**Workspace compatibility.** No migration or reset is needed. The key `investorme.workspace.v1`, version `1`, `cash` and position records `{ id, ticker, quantity, cost }` remain unchanged, as do scripts, strategies, models, alerts, settings, layouts and JSON export. Domain objects are reconstructed in memory. Financial form submissions validate before saving. Invalid saved financial values surface an error with edit/delete/cash/export actions; they are not silently repaired, discarded or replaced by demo positions.
+
+**Still demonstrative.** Prices and previous closes remain fictitious (the latter reconstructed from the existing demo percentage changes). Charts remain illustrations. The simple stress scenario is still arithmetic, not a risk engine. Model training, backtests and alert monitoring remain simulated; scripts remain inert text. Real market data, indicators, historical persistence, backtesting, machine learning and trading are not implemented.
+
+`npm run check` validates all JavaScript source and test files. `npm test` runs the core calculations/validation tests plus all existing Electron tests and new compatibility, invalid-data recovery and browser-preview checks.
 
 ---
 
@@ -698,8 +730,8 @@ The roadmap will evolve with the project, but a possible development order is:
 - [ ] Project architecture
 - [ ] Market-data abstraction
 - [ ] Local data storage
-- [ ] Basic asset model
-- [ ] Portfolio model
+- [x] Basic asset model
+- [x] Portfolio model
 - [ ] Technical indicators
 
 ### Phase 2 - Research
@@ -792,7 +824,7 @@ Anyone using the software is responsible for independently evaluating investment
 
 **Early development / research stage.**
 
-The repository contains the initial project documentation and a functional desktop UI preview with local demo data. The financial, machine-learning, and trading engines described in this roadmap are not implemented. APIs and architecture may change as development progresses.
+The repository contains a functional desktop UI with local demo data and an independent basic financial core for assets, quotes, candles, positions and portfolio valuation. Real market data and the research, machine-learning and trading engines described in this roadmap are not implemented. APIs and architecture may change as development progresses.
 
 ---
 

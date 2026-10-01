@@ -27,80 +27,8 @@ const pages = [
   ["alerts", "Alertas", "♧"],
   ["settings", "Configurações", "⚙"],
 ];
-const assets = [
-  {
-    ticker: "PETR4",
-    name: "Petrobras",
-    price: 36.5,
-    change: 1.42,
-    sector: "Energia",
-    market: "Brasil",
-    color: "green",
-  },
-  {
-    ticker: "VALE3",
-    name: "Vale",
-    price: 62.1,
-    change: -0.83,
-    sector: "Mineração",
-    market: "Brasil",
-    color: "gold",
-  },
-  {
-    ticker: "WEGE3",
-    name: "WEG",
-    price: 41.95,
-    change: 2.15,
-    sector: "Indústria",
-    market: "Brasil",
-    color: "blue",
-  },
-  {
-    ticker: "ITUB4",
-    name: "Itaú Unibanco",
-    price: 30.82,
-    change: 0.74,
-    sector: "Financeiro",
-    market: "Brasil",
-    color: "orange",
-  },
-  {
-    ticker: "BBDC4",
-    name: "Bradesco",
-    price: 12.43,
-    change: -0.32,
-    sector: "Financeiro",
-    market: "Brasil",
-    color: "red",
-  },
-  {
-    ticker: "AAPL",
-    name: "Apple",
-    price: 207.15,
-    change: 1.24,
-    sector: "Tecnologia",
-    market: "EUA",
-    color: "blue",
-  },
-  {
-    ticker: "NVDA",
-    name: "NVIDIA",
-    price: 126.45,
-    change: 3.42,
-    sector: "Tecnologia",
-    market: "EUA",
-    color: "green",
-  },
-  {
-    ticker: "MSFT",
-    name: "Microsoft",
-    price: 448.37,
-    change: 0.82,
-    sector: "Tecnologia",
-    market: "EUA",
-    color: "purple",
-  },
-];
+const finance = window.InvestorMeFinance;
+const assets = finance.assets;
 const defaults = () => ({
   version: 1,
   profile: "Meu perfil",
@@ -237,19 +165,16 @@ function asset(ticker) {
   return assets.find((a) => a.ticker === ticker);
 }
 function totals() {
-  let invested = 0,
-    value = 0;
-  state.holdings.forEach((h) => {
-    invested += h.quantity * h.cost;
-    value += h.quantity * asset(h.ticker).price;
-  });
+  const t = finance.evaluate(state);
   return {
-    invested,
-    value,
-    profit: value - invested,
-    total: value + state.cash,
+    ...t,
+    invested: t.investedCapital,
+    value: t.marketValue,
+    profit: t.unrealizedPL,
+    total: t.totalEquity,
   };
 }
+
 function button(label, action, kind = "", id = "") {
   return `<button type="button" class="button ${kind}" data-action="${action}" ${id ? `data-id="${escapeHTML(id)}"` : ""}>${label}</button>`;
 }
@@ -298,11 +223,12 @@ function assetCell(a) {
   return `<div class="asset-cell"><span class="asset-logo ${a.color}">${a.ticker.slice(0, 2)}</span><div><strong>${a.ticker}</strong><small>${a.name}</small></div></div>`;
 }
 function holdingsTable(full = false) {
+  const valuation = totals();
   return `<div class="table-wrap"><table><thead><tr><th>Ativo</th><th>Quantidade</th><th>Preço médio</th><th>Preço demo</th><th>Resultado</th>${full ? "<th>Ações</th>" : ""}</tr></thead><tbody>${
     state.holdings
       .map((h) => {
         const a = asset(h.ticker),
-          gain = (a.price - h.cost) * h.quantity;
+          gain = valuation.positions.find((row) => row.position.id === h.id).unrealizedPL;
         return `<tr><td><button class="cell-button" data-action="asset" data-id="${a.ticker}">${assetCell(a)}</button></td><td>${h.quantity.toLocaleString("pt-BR")}</td><td>${money(h.cost)}</td><td>${money(a.price)}</td><td class="${gain >= 0 ? "positive" : "negative"}">${money(gain)}</td>${full ? `<td><button class="text-button" data-action="edit-holding" data-id="${h.id}">Editar</button></td>` : ""}</tr>`;
       })
       .join("") ||
@@ -310,15 +236,16 @@ function holdingsTable(full = false) {
   }</tbody></table></div>`;
 }
 function allocation() {
-  const total = totals().total;
+  const t = totals(),
+    total = t.total;
   return `<div class="allocation"><div class="donut"><div><small>Patrimônio demo</small><strong>${money(total)}</strong><span>BRL</span></div></div><div class="legend">${state.holdings
     .map((h, i) => {
-      const val = h.quantity * asset(h.ticker).price;
-      return `<div><span class="legend-dot c${i % 5}"></span><span>${h.ticker}</span><strong>${total ? ((val / total) * 100).toFixed(1) : "0"}%</strong></div>`;
+      const weight = t.positions.find((row) => row.position.id === h.id).allocation;
+      return `<div><span class="legend-dot c${i % 5}"></span><span>${h.ticker}</span><strong>${weight.toFixed(1)}%</strong></div>`;
     })
     .join(
       "",
-    )}<div><span class="legend-dot cash"></span><span>Caixa</span><strong>${total ? ((state.cash / total) * 100).toFixed(1) : "0"}%</strong></div></div></div><p class="panel-note">Anel ilustrativo · Percentuais calculados com os valores demo</p>`;
+    )}<div><span class="legend-dot cash"></span><span>Caixa</span><strong>${t.cashAllocation.toFixed(1)}%</strong></div></div></div><p class="panel-note">Anel ilustrativo · Percentuais calculados com os valores demo</p>`;
 }
 function overview() {
   const t = totals();
@@ -328,7 +255,7 @@ function overview() {
       button("↗ Exportar workspace", "export") +
         button("+ Adicionar posição", "add-holding", "primary"),
     ) +
-    `<div class="stats">${stat("Patrimônio total", money(t.total), "Carteira + saldo demonstrativo")}${stat("Resultado da carteira", money(t.profit), `${t.invested ? pct((t.profit / t.invested) * 100) : "0%"} sobre o custo`)}${stat("Estratégias ativas", state.strategies.filter((s) => s.status === "active").length, "Prontas para explorar", "◇")}${stat("Caixa disponível", money(state.cash), "Saldo editável na carteira", "◴", "muted")}</div><div class="grid overview-grid">${panel("Evolução da carteira", `<div class="chart-head"><strong>${money(t.total)}</strong><span class="subtle">Visualização ilustrativa</span>${badge("DADOS DEMO", "neutral")}</div>${chart()}`, periods())}${panel("Seu próximo movimento", `<div class="insight-icon">✦</div><h3>Da ideia à estratégia.</h3><p>Combine regras e explore novas possibilidades em um ambiente de pesquisa.</p>${button("Explorar estratégias ↗", "go-strategies", "primary")}<div class="insight-bottom"><span class="demo-dot"></span> Nenhuma operação real será enviada.</div>`, "", "insight-panel")}</div><div class="grid lower-grid">${panel("Posições da carteira", holdingsTable(), button("Ver carteira ↗", "go-portfolio", "text"))}${panel("Workspace em foco", `<div class="activity"><span class="activity-symbol green">◇</span><div><strong>${state.strategies.length} estratégias na biblioteca</strong><small>Crie, edite e pause suas ideias.</small></div></div><div class="activity"><span class="activity-symbol blue">⬡</span><div><strong>${state.models.length} modelos de pesquisa</strong><small>Configure seu laboratório.</small></div></div><div class="activity"><span class="activity-symbol purple">♧</span><div><strong>${state.alerts.filter((a) => a.enabled).length} regras de alerta ativas</strong><small>Regras demonstrativas, sem monitoramento real.</small></div></div><div class="small-callout">Seu progresso fica salvo neste dispositivo.</div>`)}</div>`
+    `<div class="stats">${stat("Patrimônio total", money(t.total), "Carteira + saldo demonstrativo")}${stat("Resultado da carteira", money(t.profit), `${t.unrealizedPLPercentage === null ? "—" : pct(t.unrealizedPLPercentage)} sobre o custo`)}${stat("Estratégias ativas", state.strategies.filter((s) => s.status === "active").length, "Prontas para explorar", "◇")}${stat("Caixa disponível", money(state.cash), "Saldo editável na carteira", "◴", "muted")}</div><div class="grid overview-grid">${panel("Evolução da carteira", `<div class="chart-head"><strong>${money(t.total)}</strong><span class="subtle">Visualização ilustrativa</span>${badge("DADOS DEMO", "neutral")}</div>${chart()}`, periods())}${panel("Seu próximo movimento", `<div class="insight-icon">✦</div><h3>Da ideia à estratégia.</h3><p>Combine regras e explore novas possibilidades em um ambiente de pesquisa.</p>${button("Explorar estratégias ↗", "go-strategies", "primary")}<div class="insight-bottom"><span class="demo-dot"></span> Nenhuma operação real será enviada.</div>`, "", "insight-panel")}</div><div class="grid lower-grid">${panel("Posições da carteira", holdingsTable(), button("Ver carteira ↗", "go-portfolio", "text"))}${panel("Workspace em foco", `<div class="activity"><span class="activity-symbol green">◇</span><div><strong>${state.strategies.length} estratégias na biblioteca</strong><small>Crie, edite e pause suas ideias.</small></div></div><div class="activity"><span class="activity-symbol blue">⬡</span><div><strong>${state.models.length} modelos de pesquisa</strong><small>Configure seu laboratório.</small></div></div><div class="activity"><span class="activity-symbol purple">♧</span><div><strong>${state.alerts.filter((a) => a.enabled).length} regras de alerta ativas</strong><small>Regras demonstrativas, sem monitoramento real.</small></div></div><div class="small-callout">Seu progresso fica salvo neste dispositivo.</div>`)}</div>`
   );
 }
 function portfolio() {
@@ -354,7 +281,7 @@ function markets() {
     heading("Mercados", button("★ Minha watchlist", "watchlist")) +
     panel(
       "Universo de ativos",
-      `<div class="filterbar"><div class="segments">${["Todos", "Brasil", "EUA"].map((p) => `<button data-action="market-filter" data-id="${p}" class="${marketFilter === p ? "selected" : ""}">${p}</button>`).join("")}</div><input id="market-search" type="search" placeholder="Filtrar por nome ou ticker…" aria-label="Filtrar ativos" value="${escapeHTML(assetQuery)}"></div><div class="table-wrap"><table><thead><tr><th>Ativo</th><th>Mercado</th><th>Setor</th><th>Preço demo</th><th>Variação demo</th><th>Watchlist</th></tr></thead><tbody>${list.map((a) => `<tr><td><button class="cell-button" data-action="asset" data-id="${a.ticker}">${assetCell(a)}</button></td><td>${a.market}</td><td>${a.sector}</td><td>${money(a.price, a.market === "EUA" ? "USD" : "BRL")}</td><td class="${a.change >= 0 ? "positive" : "negative"}">${pct(a.change)}</td><td><button class="star-button ${state.watchlist.includes(a.ticker) ? "starred" : ""}" data-action="star" data-id="${a.ticker}" aria-label="${state.watchlist.includes(a.ticker) ? "Remover" : "Adicionar"} ${a.ticker} ${state.watchlist.includes(a.ticker) ? "da" : "à"} watchlist" aria-pressed="${state.watchlist.includes(a.ticker)}">${state.watchlist.includes(a.ticker) ? "★" : "☆"}</button></td></tr>`).join("") || '<tr><td colspan="6" class="empty">Nenhum ativo encontrado.</td></tr>'}</tbody></table></div>`,
+      `<div class="filterbar"><div class="segments">${["Todos", "Brasil", "EUA"].map((p) => `<button data-action="market-filter" data-id="${p}" class="${marketFilter === p ? "selected" : ""}">${p}</button>`).join("")}</div><input id="market-search" type="search" placeholder="Filtrar por nome ou ticker…" aria-label="Filtrar ativos" value="${escapeHTML(assetQuery)}"></div><div class="table-wrap"><table><thead><tr><th>Ativo</th><th>Mercado</th><th>Setor</th><th>Preço demo</th><th>Variação demo</th><th>Watchlist</th></tr></thead><tbody>${list.map((a) => `<tr><td><button class="cell-button" data-action="asset" data-id="${a.ticker}">${assetCell(a)}</button></td><td>${a.market}</td><td>${a.sector}</td><td>${money(a.price, a.currency)}</td><td class="${a.change >= 0 ? "positive" : "negative"}">${pct(a.change)}</td><td><button class="star-button ${state.watchlist.includes(a.ticker) ? "starred" : ""}" data-action="star" data-id="${a.ticker}" aria-label="${state.watchlist.includes(a.ticker) ? "Remover" : "Adicionar"} ${a.ticker} ${state.watchlist.includes(a.ticker) ? "da" : "à"} watchlist" aria-pressed="${state.watchlist.includes(a.ticker)}">${state.watchlist.includes(a.ticker) ? "★" : "☆"}</button></td></tr>`).join("") || '<tr><td colspan="6" class="empty">Nenhum ativo encontrado.</td></tr>'}</tbody></table></div>`,
       badge(`${list.length} ATIVOS`, "neutral"),
     )
   );
@@ -400,14 +327,7 @@ function backtests() {
 }
 function risk() {
   const t = totals(),
-    max = t.value
-      ? Math.max(
-          0,
-          ...state.holdings.map(
-            (h) => ((h.quantity * asset(h.ticker).price) / t.value) * 100,
-          ),
-        )
-      : 0;
+    max = Math.max(0, ...t.positions.map((row) => row.investedAllocation));
   return (
     heading(
       "Gestão de risco",
@@ -431,7 +351,7 @@ function alerts() {
     `<div class="stats three">${stat("Regras ativas", state.alerts.filter((a) => a.enabled).length, "Configuração local", "♧")}${stat("Não lidos", state.alerts.filter((a) => !a.read).length, "Alertas de demonstração", "◷", "muted")}${stat("Entrega de notificações", "Local", "Sem envio de e-mail ou webhooks", "◈", "muted")}</div>` +
     panel(
       "Regras de alerta",
-      `<div class="filterbar"><div class="segments">${["Todos", "Ativos", "Não lidos"].map((x) => `<button data-action="alert-filter" data-id="${x}" class="${x === alertFilter ? "selected" : ""}">${x}</button>`).join("")}</div></div><div class="table-wrap"><table><thead><tr><th>Ativo</th><th>Condição</th><th>Valor</th><th>Status</th><th>Ativado</th><th></th></tr></thead><tbody>${list.map((a) => `<tr><td>${assetCell(asset(a.ticker))}</td><td>${escapeHTML(a.condition)}</td><td>${a.condition.includes("%") ? a.value + "%" : money(a.value, asset(a.ticker).market === "EUA" ? "USD" : "BRL")}</td><td>${badge(a.read ? "Lido" : "Não lido", a.read ? "neutral" : "blue")}</td><td><button class="switch ${a.enabled ? "on" : ""}" data-action="toggle-alert" data-id="${a.id}" role="switch" aria-checked="${a.enabled}" aria-label="Ativar alerta de ${a.ticker}"></button></td><td><button class="text-button" data-action="edit-alert" data-id="${a.id}">Editar</button></td></tr>`).join("") || '<tr><td colspan="6" class="empty">Nenhum alerta neste filtro.</td></tr>'}</tbody></table></div>`,
+      `<div class="filterbar"><div class="segments">${["Todos", "Ativos", "Não lidos"].map((x) => `<button data-action="alert-filter" data-id="${x}" class="${x === alertFilter ? "selected" : ""}">${x}</button>`).join("")}</div></div><div class="table-wrap"><table><thead><tr><th>Ativo</th><th>Condição</th><th>Valor</th><th>Status</th><th>Ativado</th><th></th></tr></thead><tbody>${list.map((a) => `<tr><td>${assetCell(asset(a.ticker))}</td><td>${escapeHTML(a.condition)}</td><td>${a.condition.includes("%") ? a.value + "%" : money(a.value, asset(a.ticker).currency)}</td><td>${badge(a.read ? "Lido" : "Não lido", a.read ? "neutral" : "blue")}</td><td><button class="switch ${a.enabled ? "on" : ""}" data-action="toggle-alert" data-id="${a.id}" role="switch" aria-checked="${a.enabled}" aria-label="Ativar alerta de ${a.ticker}"></button></td><td><button class="text-button" data-action="edit-alert" data-id="${a.id}">Editar</button></td></tr>`).join("") || '<tr><td colspan="6" class="empty">Nenhum alerta neste filtro.</td></tr>'}</tbody></table></div>`,
     )
   );
 }
@@ -515,8 +435,16 @@ function render() {
   $("#profile-name").innerHTML =
     `${escapeHTML(state.profile)}<small>Workspace local</small>`;
   $("#notification-dot").hidden = !state.alerts.some((a) => !a.read);
-  $("#main").innerHTML = renderers[page]();
-  applyPageLayout();
+  try {
+    $("#main").innerHTML = renderers[page]();
+    applyPageLayout();
+  } catch (error) {
+    if (!(error instanceof finance.DomainError)) throw error;
+    // Keep the stored workspace intact and offer repair/export instead of reset.
+    $("#main").innerHTML = heading("Dados financeiros inválidos",
+      button("Exportar workspace", "export") + button("Editar caixa", "cash")) +
+      panel("Verifique os dados da carteira", `<p role="alert">${escapeHTML(error.message)}</p><p>Os dados foram preservados. Corrija ou exclua a posição inválida.</p>${state.holdings.map(h => `<div>${escapeHTML(h.ticker)} ${button("Editar", "edit-holding", "", h.id)} ${button("Excluir", "delete-holding", "danger", h.id)}</div>`).join("")}`);
+  }
   renderSectionNavigation();
 }
 function route() {
@@ -581,7 +509,7 @@ function editHolding(id) {
           .map((a) => [a.ticker, a.ticker + " · " + a.name]),
         h?.ticker,
       ) +
-        `<div class="form-row">${field("Quantidade", "quantity", h?.quantity || 100, "number", 'min="1" max="100000000" step="1"')}${field("Preço médio (R$)", "cost", h?.cost || 30, "number", 'min="0.01" max="1000000000" step="0.01"')}</div><p class="panel-note">Preços fictícios. Nenhuma ordem será enviada.</p>`,
+        `<div class="form-row">${field("Quantidade", "quantity", h?.quantity ?? 100, "number", 'min="1" max="100000000" step="1"')}${field("Preço médio (R$)", "cost", h?.cost ?? 30, "number", 'min="0.01" max="1000000000" step="0.01"')}</div><p class="panel-note">Preços fictícios. Nenhuma ordem será enviada.</p>`,
       id,
       h ? button("Excluir", "delete-holding", "danger", id) : "",
     ),
@@ -721,7 +649,7 @@ function showAsset(ticker) {
   const a = asset(ticker);
   openModal(
     `${a.ticker} · ${a.name}`,
-    `<div class="asset-modal-head">${assetCell(a)}${badge("DADOS FICTÍCIOS", "neutral")}</div><div class="asset-price">${money(a.price, a.market === "EUA" ? "USD" : "BRL")} <small class="${a.change >= 0 ? "positive" : "negative"}">${pct(a.change)}</small></div><dl class="details"><div><dt>Mercado</dt><dd>${a.market}</dd></div><div><dt>Setor</dt><dd>${a.sector}</dd></div></dl><div class="modal-footer">${button(state.watchlist.includes(ticker) ? "★ Remover da watchlist" : "☆ Adicionar à watchlist", "modal-star", "", ticker)}${a.market === "Brasil" ? button("+ Adicionar posição", "asset-position", "primary", ticker) : ""}</div>`,
+    `<div class="asset-modal-head">${assetCell(a)}${badge("DADOS FICTÍCIOS", "neutral")}</div><div class="asset-price">${money(a.price, a.currency)} <small class="${a.change >= 0 ? "positive" : "negative"}">${pct(a.change)}</small></div><dl class="details"><div><dt>Mercado</dt><dd>${a.market}</dd></div><div><dt>Setor</dt><dd>${a.sector}</dd></div></dl><div class="modal-footer">${button(state.watchlist.includes(ticker) ? "★ Remover da watchlist" : "☆ Adicionar à watchlist", "modal-star", "", ticker)}${a.market === "Brasil" ? button("+ Adicionar posição", "asset-position", "primary", ticker) : ""}</div>`,
   );
 }
 function showSearch() {
@@ -1060,11 +988,25 @@ document.addEventListener("submit", async (event) => {
         quantity: number("quantity"),
         cost: number("cost"),
       };
+      try {
+        finance.validatePosition(h);
+      } catch (error) {
+        if (!(error instanceof finance.DomainError)) throw error;
+        $(".form-error", f).textContent = "Posição inválida: " + error.message;
+        return;
+      }
       if (id) state.holdings = state.holdings.map((x) => (x.id === id ? h : x));
       else state.holdings.push(h);
       break;
     }
     case "cash":
+      try {
+        finance.validateCash(number("cash"));
+      } catch (error) {
+        if (!(error instanceof finance.DomainError)) throw error;
+        $(".form-error", f).textContent = "Caixa inválido: " + error.message;
+        return;
+      }
       state.cash = number("cash");
       break;
     case "profile":
