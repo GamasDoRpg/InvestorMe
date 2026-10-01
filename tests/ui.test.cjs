@@ -27,7 +27,7 @@ const fill = (name, value) => page.locator(`[name="${name}"]`).fill(value);
 const save = () => page.locator('button[type="submit"]').click();
 async function navigate(id) {
   await page.locator(`nav a[href="#${id}"]`).click();
-  await page.waitForFunction((id) => location.hash === "#" + id, id);
+  await page.waitForSelector(`nav a[href="#${id}"][aria-current="page"]`);
 }
 test("Every page renders without horizontal window overflow at desktop sizes", async () => {
   for (const width of [1480, 1024]) {
@@ -99,7 +99,7 @@ test("Search, watchlist and market filters respond", async () => {
   await page.keyboard.press("Control+k");
   await page.locator("#global-search").fill("Gestão de risco");
   await click("search-page");
-  await page.waitForFunction(() => location.hash === "#risk");
+  await page.waitForSelector('nav a[href="#risk"][aria-current="page"]');
   assert.equal(
     await page.locator("#breadcrumb").textContent(),
     "Gestão de risco",
@@ -204,5 +204,115 @@ test("Theme, preferences, export and reset confirmation work", async () => {
     await page.locator("html").getAttribute("data-density"),
     "comfortable",
   );
+  assert.deepEqual(errors, []);
+});
+
+test("Page layouts support resize, reorder, visibility, customization and persistence", async () => {
+  const edit = () => page.locator('[data-layout="edit"]').click();
+  await navigate("overview");
+  await edit();
+  assert.equal(await page.locator(".layout-widget").count(), 8);
+  await page
+    .locator('[data-layout="configure"][data-widget="performance"]')
+    .click();
+  await fill("title", "Meu desempenho");
+  await page.locator('[name="width"]').selectOption("12");
+  await fill("height", "400");
+  await page.locator('[name="accent"]').selectOption("blue");
+  await save();
+  const performance = page.locator('[data-layout-id="performance"]');
+  assert.equal(await performance.getAttribute("data-width"), "12");
+  assert.equal(await performance.getAttribute("data-accent"), "blue");
+  assert.equal(await performance.locator("h2").innerText(), "Meu desempenho");
+  await page.locator('[data-layout="up"][data-widget="performance"]').click();
+  assert.equal(
+    await page.locator(".layout-widget").nth(3).getAttribute("data-layout-id"),
+    "performance",
+  );
+  await page
+    .locator('[data-drag-widget="performance"]')
+    .dragTo(page.locator('[data-drag-widget="total"]'));
+  assert.equal(
+    await page.locator(".layout-widget").first().getAttribute("data-layout-id"),
+    "performance",
+  );
+  const handle = performance.locator(".widget-resize");
+  const box = await handle.boundingBox();
+  await page.mouse.move(box.x + 10, box.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(box.x - 350, box.y + 80, { steps: 8 });
+  await page.mouse.up();
+  assert.notEqual(await performance.getAttribute("data-width"), "12");
+  assert.ok((await performance.boundingBox()).height > 400);
+  await page.locator('[data-layout="hide"][data-widget="performance"]').click();
+  assert.equal(await performance.count(), 0);
+  await page.locator('[data-layout="catalog"]').click();
+  await page
+    .locator('[data-layout="visibility"][data-widget="performance"]')
+    .click();
+  await page.locator('[data-layout="close"]').click();
+  await page.locator('[data-layout="done"]').click();
+  await page.reload();
+  assert.equal(await performance.locator("h2").innerText(), "Meu desempenho");
+  assert.equal(await page.locator(".widget-tools").count(), 0);
+  await navigate("portfolio");
+  assert.equal(await page.locator(".custom-layout-grid").count(), 0);
+  await edit();
+  await page.locator('[data-layout="hide"][data-widget="cash"]').click();
+  // Normal interactions still work inside rearranged panels.
+  await click("edit-holding");
+  await fill("quantity", "301");
+  await save();
+  await navigate("overview");
+  assert.equal(await performance.locator("h2").innerText(), "Meu desempenho");
+  await edit();
+  await page.locator('[data-layout="reset"]').click();
+  await page.locator('[data-layout="confirm-reset"]').click();
+  assert.equal(await page.locator(".custom-layout-grid").count(), 0);
+  await navigate("portfolio");
+  assert.equal(await page.locator('[data-layout-id="cash"]').count(), 0);
+  assert.match(await page.locator("tbody").textContent(), /301/);
+  await navigate("markets");
+  await edit();
+  await page.locator('[data-layout="hide"]').click();
+  assert.equal(await page.locator(".layout-empty").count(), 1);
+  await page.locator('[data-layout="catalog"]').last().click();
+  await page.locator('[data-layout="visibility"]').click();
+  await page.locator('[data-layout="close"]').click();
+  assert.equal(await page.locator(".layout-widget").count(), 1);
+  assert.deepEqual(errors, []);
+});
+
+test("Every page can enter customization with stable widget IDs", async () => {
+  for (const id of [
+    "overview",
+    "portfolio",
+    "markets",
+    "strategies",
+    "models",
+    "backtests",
+    "risk",
+    "alerts",
+    "settings",
+  ]) {
+    await navigate(id);
+    if (await page.locator('[data-layout="edit"]').count())
+      await page.locator('[data-layout="edit"]').click();
+    const ids = await page
+      .locator(".layout-widget")
+      .evaluateAll((nodes) => nodes.map((n) => n.dataset.layoutId));
+    assert.ok(ids.length > 0, id);
+    assert.ok(
+      ids.every((x) => x && x !== "undefined"),
+      id,
+    );
+    assert.equal(new Set(ids).size, ids.length, id);
+    assert.equal(
+      await page.locator("main").evaluate((n) => n.scrollWidth > n.clientWidth),
+      false,
+      id,
+    );
+    await page.locator('[data-layout="done"]').click();
+  }
   assert.deepEqual(errors, []);
 });

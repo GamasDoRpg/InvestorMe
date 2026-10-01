@@ -345,10 +345,7 @@ function markets() {
         .includes(assetQuery.toLowerCase()),
   );
   return (
-    heading(
-      "Mercados",
-      button("★ Minha watchlist", "watchlist"),
-    ) +
+    heading("Mercados", button("★ Minha watchlist", "watchlist")) +
     panel(
       "Universo de ativos",
       `<div class="filterbar"><div class="segments">${["Todos", "Brasil", "EUA"].map((p) => `<button data-action="market-filter" data-id="${p}" class="${marketFilter === p ? "selected" : ""}">${p}</button>`).join("")}</div><input id="market-search" type="search" placeholder="Filtrar por nome ou ticker…" aria-label="Filtrar ativos" value="${escapeHTML(assetQuery)}"></div><div class="table-wrap"><table><thead><tr><th>Ativo</th><th>Mercado</th><th>Setor</th><th>Preço demo</th><th>Variação demo</th><th>Watchlist</th></tr></thead><tbody>${list.map((a) => `<tr><td><button class="cell-button" data-action="asset" data-id="${a.ticker}">${assetCell(a)}</button></td><td>${a.market}</td><td>${a.sector}</td><td>${money(a.price, a.market === "EUA" ? "USD" : "BRL")}</td><td class="${a.change >= 0 ? "positive" : "negative"}">${pct(a.change)}</td><td><button class="star-button ${state.watchlist.includes(a.ticker) ? "starred" : ""}" data-action="star" data-id="${a.ticker}" aria-label="${state.watchlist.includes(a.ticker) ? "Remover" : "Adicionar"} ${a.ticker} ${state.watchlist.includes(a.ticker) ? "da" : "à"} watchlist" aria-pressed="${state.watchlist.includes(a.ticker)}">${state.watchlist.includes(a.ticker) ? "★" : "☆"}</button></td></tr>`).join("") || '<tr><td colspan="6" class="empty">Nenhum ativo encontrado.</td></tr>'}</tbody></table></div>`,
@@ -371,19 +368,13 @@ function strategies() {
 function models() {
   const m = state.models.find((x) => x.id === selectedModel) || state.models[0];
   return (
-    heading(
-      "Modelos",
-      button("+ Novo modelo", "add-model", "primary"),
-    ) +
+    heading("Modelos", button("+ Novo modelo", "add-model", "primary")) +
     `<div class="stats three">${stat("Modelos no workspace", state.models.length, "Biblioteca local", "⬡", "muted")}${stat("Modelos configurados", state.models.filter((x) => x.status === "ready").length, "Prontos para uma simulação", "✓")}${stat("Treinamento real", "Em breve", "Esta versão demonstra o fluxo", "⌁", "muted")}</div><div class="grid two-cols">${panel("Registro de modelos", `<div class="model-list">${state.models.map((x) => `<button class="model-row ${m?.id === x.id ? "selected" : ""}" data-action="select-model" data-id="${x.id}"><span class="activity-symbol blue">⬡</span><div><strong>${escapeHTML(x.name)}</strong><small>${escapeHTML(x.type)}</small></div>${badge(x.status === "ready" ? "Configurado" : "Rascunho", x.status === "ready" ? "green" : "neutral")}</button>`).join("")}</div>`)}${m ? panel("Detalhes do modelo", `<div class="model-detail-icon">⬡</div><h3>${escapeHTML(m.name)}</h3><p>${escapeHTML(m.type)}</p><dl class="details"><div><dt>Dataset</dt><dd>Exemplo demonstrativo</dd></div><div><dt>Validação</dt><dd>Walk-forward (planejado)</dd></div><div><dt>Última simulação</dt><dd>${m.lastRun ? escapeHTML(new Date(m.lastRun).toLocaleString("pt-BR")) : "Ainda não executada"}</dd></div></dl><div class="small-callout">O fluxo abaixo simula uma execução. Nenhum modelo é treinado e nenhuma previsão é gerada.</div><div class="detail-actions">${button("Editar", "edit-model", "", m.id)}${button("▷ Simular treinamento", "train-model", "primary", m.id)}</div>`) : ""}</div>`
   );
 }
 function backtests() {
   return (
-    heading(
-      "Backtests",
-      button("+ Novo backtest", "add-backtest", "primary"),
-    ) +
+    heading("Backtests", button("+ Novo backtest", "add-backtest", "primary")) +
     panel(
       "Histórico de experimentos",
       `<div class="table-wrap"><table><thead><tr><th>Experimento</th><th>Estratégia</th><th>Período</th><th>Capital inicial</th><th>Status</th><th></th></tr></thead><tbody>${state.backtests.map((b) => `<tr><td><strong>${escapeHTML(b.name)}</strong><small>${new Date(b.created).toLocaleDateString("pt-BR")}</small></td><td>${escapeHTML(b.strategy)}</td><td>${escapeHTML(b.start)} → ${escapeHTML(b.end)}</td><td>${money(b.capital)}</td><td>${badge("Demo concluída")}</td><td><button class="text-button" data-action="view-backtest" data-id="${b.id}">Ver detalhes ↗</button></td></tr>`).join("") || '<tr><td colspan="6"><div class="empty-state"><span>⌁</span><h3>Seu primeiro experimento espera por você.</h3><p>Crie um backtest para conhecer o fluxo de pesquisa.</p>' + button("Criar experimento", "add-backtest", "primary") + "</div></td></tr>"}</tbody></table></div>`,
@@ -429,9 +420,7 @@ function alerts() {
 }
 function settings() {
   return (
-    heading(
-      "Configurações",
-    ) +
+    heading("Configurações") +
     `<div class="grid two-cols">${panel("Perfil do workspace", `<div class="profile-large"><span class="avatar">${escapeHTML(state.profile.charAt(0).toUpperCase())}</span><div><h3>${escapeHTML(state.profile)}</h3><p>Perfil local · Sem conta conectada</p></div>${button("Editar", "profile")}</div><dl class="details"><div><dt>Moeda da carteira</dt><dd>Real brasileiro (BRL)</dd></div><div><dt>Idioma</dt><dd>Português (Brasil)</dd></div><div><dt>Persistência</dt><dd>Neste dispositivo</dd></div></dl>`)}${panel(
       "Aparência",
       `<p>Escolha o ambiente que combina com sua pesquisa.</p><div class="theme-options">${[
@@ -494,10 +483,12 @@ function render() {
     `${escapeHTML(state.profile)}<small>Workspace local</small>`;
   $("#notification-dot").hidden = !state.alerts.some((a) => !a.read);
   $("#main").innerHTML = renderers[page]();
+  applyPageLayout();
 }
 function route() {
   const id = location.hash.slice(1);
   page = renderers[id] ? id : "overview";
+  if (layoutEditingPage !== page) layoutEditingPage = null;
   render();
   $("#main").scrollTop = 0;
 }

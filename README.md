@@ -44,6 +44,10 @@ InvestorMe opens as a desktop window with minimize, maximize/restore, and close 
 
 All prices, charts, and market changes are **demonstrative**. Charts are illustrations, not financial outputs. Model training, backtesting, alert monitoring, brokerage connections, authentication, and live trading are **not implemented**. The active strategy switch only changes its saved local state. Exported JSON is a snapshot; importing is not implemented yet.
 
+### Customize a page
+
+Click **Personalizar** in the page header. Drag a panel by its title (or use the arrow buttons) to reorder it; drag the bottom-right corner to resize it. The gear button edits its name, width, height and accent color. Use **Painéis** to show or hide existing panels, then **Concluir** to leave edit mode. **Restaurar padrão** resets only the current page layout, keeping portfolio and research data. Layouts are saved per page in the local workspace and included in JSON exports. On narrower windows, panels adapt to keep their contents accessible.
+
 ### Build for Windows
 
 ```powershell
