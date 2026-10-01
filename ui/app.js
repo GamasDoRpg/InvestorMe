@@ -250,8 +250,8 @@ function button(label, action, kind = "", id = "") {
 function badge(label, kind = "green") {
   return `<span class="badge ${kind}">${escapeHTML(label)}</span>`;
 }
-function heading(title, desc, actions = "") {
-  return `<div class="page-heading"><div><div class="eyebrow">SEU WORKSPACE, SUA PERSPECTIVA</div><h1>${title}</h1><p>${desc}</p></div><div class="heading-actions">${actions}</div></div>`;
+function heading(title, actions = "") {
+  return `<div class="page-heading"><div><h1>${title}</h1></div><div class="heading-actions">${actions}</div></div>`;
 }
 function panel(title, content, action = "", cls = "") {
   return `<section class="panel ${cls}"><div class="panel-heading"><h2>${title}</h2>${action}</div>${content}</section>`;
@@ -318,8 +318,7 @@ function overview() {
   const t = totals();
   return (
     heading(
-      "Um novo olhar sobre seus investimentos.",
-      "Organize sua carteira, explore estratégias e transforme ideias em pesquisa.",
+      "Visão geral",
       button("↗ Exportar workspace", "export") +
         button("+ Adicionar posição", "add-holding", "primary"),
     ) +
@@ -330,8 +329,7 @@ function portfolio() {
   const t = totals();
   return (
     heading(
-      "Sua carteira, em perspectiva.",
-      "Acompanhe suas posições e organize a alocação do seu capital.",
+      "Carteira",
       button("Editar caixa", "cash") +
         button("+ Adicionar posição", "add-holding", "primary"),
     ) +
@@ -348,11 +346,9 @@ function markets() {
   );
   return (
     heading(
-      "O mercado no seu radar.",
-      "Explore ativos de exemplo e monte sua lista de acompanhamento.",
+      "Mercados",
       button("★ Minha watchlist", "watchlist"),
     ) +
-    `<div class="market-banner"><div><span class="eyebrow">EXPLORAÇÃO DE MERCADO</span><h2>Uma visão ampla. Seu próprio foco.</h2><p>Preços estáticos para explorar a interface, sem cotações em tempo real.</p></div><div class="market-decoration">▂ ▄ ▃ ▆ ▅ █</div></div>` +
     panel(
       "Universo de ativos",
       `<div class="filterbar"><div class="segments">${["Todos", "Brasil", "EUA"].map((p) => `<button data-action="market-filter" data-id="${p}" class="${marketFilter === p ? "selected" : ""}">${p}</button>`).join("")}</div><input id="market-search" type="search" placeholder="Filtrar por nome ou ticker…" aria-label="Filtrar ativos" value="${escapeHTML(assetQuery)}"></div><div class="table-wrap"><table><thead><tr><th>Ativo</th><th>Mercado</th><th>Setor</th><th>Preço demo</th><th>Variação demo</th><th>Watchlist</th></tr></thead><tbody>${list.map((a) => `<tr><td><button class="cell-button" data-action="asset" data-id="${a.ticker}">${assetCell(a)}</button></td><td>${a.market}</td><td>${a.sector}</td><td>${money(a.price, a.market === "EUA" ? "USD" : "BRL")}</td><td class="${a.change >= 0 ? "positive" : "negative"}">${pct(a.change)}</td><td><button class="star-button ${state.watchlist.includes(a.ticker) ? "starred" : ""}" data-action="star" data-id="${a.ticker}" aria-label="${state.watchlist.includes(a.ticker) ? "Remover" : "Adicionar"} ${a.ticker} ${state.watchlist.includes(a.ticker) ? "da" : "à"} watchlist" aria-pressed="${state.watchlist.includes(a.ticker)}">${state.watchlist.includes(a.ticker) ? "★" : "☆"}</button></td></tr>`).join("") || '<tr><td colspan="6" class="empty">Nenhum ativo encontrado.</td></tr>'}</tbody></table></div>`,
@@ -366,19 +362,17 @@ function strategies() {
     state.strategies[0];
   return (
     heading(
-      "Ideias que ganham estrutura.",
-      "Defina suas regras, organize estratégias e explore cenários.",
+      "Estratégias",
       button("+ Nova estratégia", "add-strategy", "primary"),
     ) +
-    `<div class="grid strategy-grid"><section class="strategy-library"><div class="section-label">BIBLIOTECA <span>${state.strategies.length}</span></div>${state.strategies.map((x) => `<button class="strategy-card ${s?.id === x.id ? "active" : ""}" data-action="select-strategy" data-id="${x.id}"><div class="strategy-card-top"><span class="activity-symbol ${x.type === "Value" ? "purple" : "green"}">${x.type === "Dividendos" ? "◴" : "▥"}</span>${badge(x.status === "active" ? "Ativa" : "Pausada", x.status === "active" ? "green" : "neutral")}</div><h3>${escapeHTML(x.name)}</h3><p>${escapeHTML(x.type)} · ${escapeHTML(x.universe)}</p><div class="strategy-card-foot"><span>Limite por posição</span><strong>${x.limit}%</strong></div></button>`).join("") || '<div class="empty">Crie sua primeira estratégia.</div>'}</section><div>${s ? panel(escapeHTML(s.name), `<div class="strategy-detail-tags">${badge(s.type, "blue")}${badge("SIMULAÇÃO", "neutral")}${badge(s.status === "active" ? "Ativa" : "Pausada", s.status === "active" ? "green" : "neutral")}</div><div class="detail-intro"><h3>Uma hipótese. Regras claras.</h3><p>Configure sua estratégia antes de conectá-la a um motor de pesquisa.</p></div><div class="rule"><span>01</span><div><small>UNIVERSO</small><strong>${escapeHTML(s.universe)}</strong></div></div><div class="rule"><span>02</span><div><small>CONDIÇÃO DE ENTRADA</small><strong>${escapeHTML(s.rule)}</strong></div></div><div class="rule"><span>03</span><div><small>GESTÃO DE CAPITAL</small><strong>Até ${s.limit}% do capital por posição</strong></div></div><div class="detail-actions">${button(s.status === "active" ? "Ⅱ Pausar estratégia" : "▷ Ativar estratégia", "toggle-strategy", "", s.id)}${button("Criar backtest ↗", "strategy-backtest", "primary", s.id)}</div><div class="small-callout">Ativar altera o estado local. A execução de estratégias será implementada em uma próxima etapa.</div>`, button("Editar regras", "edit-strategy", "text", s.id)) : panel("Sua biblioteca começa aqui", '<div class="empty">Adicione uma estratégia para configurar suas regras.</div>')}</div></div>`
+    `<div class="grid strategy-grid"><section class="strategy-library"><div class="section-label">BIBLIOTECA <span>${state.strategies.length}</span></div>${state.strategies.map((x) => `<button class="strategy-card ${s?.id === x.id ? "active" : ""}" data-action="select-strategy" data-id="${x.id}"><div class="strategy-card-top"><span class="activity-symbol ${x.type === "Value" ? "purple" : "green"}">${x.type === "Dividendos" ? "◴" : "▥"}</span>${badge(x.status === "active" ? "Ativa" : "Pausada", x.status === "active" ? "green" : "neutral")}</div><h3>${escapeHTML(x.name)}</h3><p>${escapeHTML(x.type)} · ${escapeHTML(x.universe)}</p><div class="strategy-card-foot"><span>Limite por posição</span><strong>${x.limit}%</strong></div></button>`).join("") || '<div class="empty">Crie sua primeira estratégia.</div>'}</section><div>${s ? panel(escapeHTML(s.name), `<div class="strategy-detail-tags">${badge(s.type, "blue")}${badge("SIMULAÇÃO", "neutral")}${badge(s.status === "active" ? "Ativa" : "Pausada", s.status === "active" ? "green" : "neutral")}</div><div class="rule"><span>01</span><div><small>UNIVERSO</small><strong>${escapeHTML(s.universe)}</strong></div></div><div class="rule"><span>02</span><div><small>CONDIÇÃO DE ENTRADA</small><strong>${escapeHTML(s.rule)}</strong></div></div><div class="rule"><span>03</span><div><small>GESTÃO DE CAPITAL</small><strong>Até ${s.limit}% do capital por posição</strong></div></div><div class="detail-actions">${button(s.status === "active" ? "Ⅱ Pausar estratégia" : "▷ Ativar estratégia", "toggle-strategy", "", s.id)}${button("Criar backtest ↗", "strategy-backtest", "primary", s.id)}</div><div class="small-callout">Ativar altera o estado local. A execução de estratégias será implementada em uma próxima etapa.</div>`, button("Editar regras", "edit-strategy", "text", s.id)) : panel("Sua biblioteca começa aqui", '<div class="empty">Adicione uma estratégia para configurar suas regras.</div>')}</div></div>`
   );
 }
 function models() {
   const m = state.models.find((x) => x.id === selectedModel) || state.models[0];
   return (
     heading(
-      "Seu laboratório de modelos.",
-      "Organize experimentos e configure modelos de pesquisa.",
+      "Modelos",
       button("+ Novo modelo", "add-model", "primary"),
     ) +
     `<div class="stats three">${stat("Modelos no workspace", state.models.length, "Biblioteca local", "⬡", "muted")}${stat("Modelos configurados", state.models.filter((x) => x.status === "ready").length, "Prontos para uma simulação", "✓")}${stat("Treinamento real", "Em breve", "Esta versão demonstra o fluxo", "⌁", "muted")}</div><div class="grid two-cols">${panel("Registro de modelos", `<div class="model-list">${state.models.map((x) => `<button class="model-row ${m?.id === x.id ? "selected" : ""}" data-action="select-model" data-id="${x.id}"><span class="activity-symbol blue">⬡</span><div><strong>${escapeHTML(x.name)}</strong><small>${escapeHTML(x.type)}</small></div>${badge(x.status === "ready" ? "Configurado" : "Rascunho", x.status === "ready" ? "green" : "neutral")}</button>`).join("")}</div>`)}${m ? panel("Detalhes do modelo", `<div class="model-detail-icon">⬡</div><h3>${escapeHTML(m.name)}</h3><p>${escapeHTML(m.type)}</p><dl class="details"><div><dt>Dataset</dt><dd>Exemplo demonstrativo</dd></div><div><dt>Validação</dt><dd>Walk-forward (planejado)</dd></div><div><dt>Última simulação</dt><dd>${m.lastRun ? escapeHTML(new Date(m.lastRun).toLocaleString("pt-BR")) : "Ainda não executada"}</dd></div></dl><div class="small-callout">O fluxo abaixo simula uma execução. Nenhum modelo é treinado e nenhuma previsão é gerada.</div><div class="detail-actions">${button("Editar", "edit-model", "", m.id)}${button("▷ Simular treinamento", "train-model", "primary", m.id)}</div>`) : ""}</div>`
@@ -387,11 +381,9 @@ function models() {
 function backtests() {
   return (
     heading(
-      "Teste o fluxo das suas hipóteses.",
-      "Configure um experimento e explore uma execução demonstrativa.",
+      "Backtests",
       button("+ Novo backtest", "add-backtest", "primary"),
     ) +
-    `<div class="backtest-hero"><span class="activity-symbol green">⌁</span><div><h2>Pesquisa começa com uma boa pergunta.</h2><p>Selecione uma estratégia, um período e um capital inicial. Esta versão simula apenas as etapas da execução.</p></div></div>` +
     panel(
       "Histórico de experimentos",
       `<div class="table-wrap"><table><thead><tr><th>Experimento</th><th>Estratégia</th><th>Período</th><th>Capital inicial</th><th>Status</th><th></th></tr></thead><tbody>${state.backtests.map((b) => `<tr><td><strong>${escapeHTML(b.name)}</strong><small>${new Date(b.created).toLocaleDateString("pt-BR")}</small></td><td>${escapeHTML(b.strategy)}</td><td>${escapeHTML(b.start)} → ${escapeHTML(b.end)}</td><td>${money(b.capital)}</td><td>${badge("Demo concluída")}</td><td><button class="text-button" data-action="view-backtest" data-id="${b.id}">Ver detalhes ↗</button></td></tr>`).join("") || '<tr><td colspan="6"><div class="empty-state"><span>⌁</span><h3>Seu primeiro experimento espera por você.</h3><p>Crie um backtest para conhecer o fluxo de pesquisa.</p>' + button("Criar experimento", "add-backtest", "primary") + "</div></td></tr>"}</tbody></table></div>`,
@@ -410,8 +402,7 @@ function risk() {
       : 0;
   return (
     heading(
-      "Risco também faz parte da visão.",
-      "Defina limites e explore a exposição da carteira demonstrativa.",
+      "Gestão de risco",
       button("Ajustar limites", "risk-limits", "primary"),
     ) +
     `<div class="stats three">${stat("Maior posição", max.toFixed(1) + "%", max > state.risk.position ? "Acima do limite configurado" : "Dentro do limite configurado", "⬟", max > state.risk.position ? "negative" : "positive")}${stat("Limite por posição", state.risk.position + "%", "Parâmetro local editável", "◈", "muted")}${stat("Limite de drawdown", state.risk.drawdown + "%", "Sem monitoramento real", "⌁", "muted")}</div><div class="grid two-cols">${panel("Exposição da carteira", allocation())}${panel("Drawdown ilustrativo", chart("risk"), periods())}</div><div class="grid two-cols">${panel("Limites de pesquisa", `<dl class="details"><div><dt>Máximo por posição</dt><dd>${state.risk.position}%</dd></div><div><dt>Máximo por setor</dt><dd>${state.risk.sector}%</dd></div><div><dt>Drawdown máximo</dt><dd>${state.risk.drawdown}%</dd></div></dl><p class="panel-note">Parâmetros salvos para futuras integrações.</p>`)}${panel("Cenários de estresse", `<p>Explore o efeito aritmético de uma queda uniforme nos preços demo da carteira.</p><label>Cenário<select id="stress-scenario"><option value="10">Correção moderada · −10%</option><option value="20">Queda acentuada · −20%</option><option value="35">Choque de mercado · −35%</option></select></label><div class="detail-actions">${button("Calcular cenário", "stress", "primary")}</div><div id="stress-result" aria-live="polite"></div>`)}</div>`
@@ -425,8 +416,7 @@ function alerts() {
   );
   return (
     heading(
-      "Mantenha o que importa por perto.",
-      "Crie regras de exemplo e organize as notificações do workspace.",
+      "Alertas",
       button("Marcar todos como lidos", "read-alerts") +
         button("+ Criar alerta", "add-alert", "primary"),
     ) +
@@ -440,8 +430,7 @@ function alerts() {
 function settings() {
   return (
     heading(
-      "Um workspace com a sua cara.",
-      "Personalize a experiência e gerencie seus dados locais.",
+      "Configurações",
     ) +
     `<div class="grid two-cols">${panel("Perfil do workspace", `<div class="profile-large"><span class="avatar">${escapeHTML(state.profile.charAt(0).toUpperCase())}</span><div><h3>${escapeHTML(state.profile)}</h3><p>Perfil local · Sem conta conectada</p></div>${button("Editar", "profile")}</div><dl class="details"><div><dt>Moeda da carteira</dt><dd>Real brasileiro (BRL)</dd></div><div><dt>Idioma</dt><dd>Português (Brasil)</dd></div><div><dt>Persistência</dt><dd>Neste dispositivo</dd></div></dl>`)}${panel(
       "Aparência",
