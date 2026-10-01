@@ -14,9 +14,11 @@ InvestorMe is currently in an early stage of development. The architecture and f
 
 ## Desktop interface preview (v0.1)
 
-The repository now includes a runnable **Electron desktop interface**, inspired by the eight mockups in `assets/FirstInterfaceModel`. The interface is in Brazilian Portuguese and uses a dark navy/green theme, with light and system themes available.
+The repository now includes a runnable **Electron desktop interface**, inspired by the eight mockups in `assets/FirstInterfaceModel`. The interface is in Brazilian Portuguese and uses a monochrome textured theme with restrained lime accents, with dark, light and system modes available.
 
-![InvestorMe desktop interface preview](assets/desktop-preview.png)
+![InvestorMe dark interface](assets/desktop-preview-dark.jpg)
+
+![InvestorMe light interface](assets/desktop-preview-light.jpg)
 
 ### Run on Windows
 
