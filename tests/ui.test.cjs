@@ -12,7 +12,7 @@ before(async () => {
   if (process.platform === "linux") args.push("--ozone-platform=headless");
   // Root containers cannot use Chromium's OS sandbox. Production startup never sets this flag.
   if (process.getuid?.() === 0) args.push("--no-sandbox");
-  app = await electron.launch({ args });
+  app = await electron.launch({ args, env: { ...process.env, MARKET_DATA_PROVIDER: "mock", TWELVE_DATA_API_KEY: "" } });
   page = await app.firstWindow();
   page.on("pageerror", (err) => errors.push(err.message));
   await page.waitForSelector("h1");
@@ -495,5 +495,83 @@ test("Browser preview loads core modules under the existing CSP", async () => {
       await BrowserWindow.getAllWindows()[0].loadURL(url);
     }, originalUrl);
     server.kill();
+  }
+});
+
+test("Market provider UI shows mock freshness, daily history and safe IPC", async () => {
+  await navigate("markets");
+  assert.match(await page.locator('.market-status').textContent(), /Mock Provider/);
+  await page.locator('#market-search').fill('AAPL');
+  assert.match(await page.locator('tbody').textContent(), /Demo/);
+  await click('market-search');
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('investorme.workspace.v1')).marketAssets?.length > 0);
+  await click('asset');
+  await click('market-history');
+  await page.waitForFunction(() => document.querySelector('#modal-title').textContent.includes('Histórico diário'));
+  assert.ok(await page.locator('#modal-content tbody tr').count());
+  assert.match(await page.locator('#modal-content').textContent(), /Dados demonstrativos/);
+  await click('close-modal');
+  const result = await page.evaluate(() => window.desktop.market.getQuote({ url: 'https://evil.test' }));
+  assert.equal(result.ok, false); assert.equal(result.error.code, 'INVALID_REQUEST');
+  const security = await app.evaluate(({ BrowserWindow }) => {
+    const prefs = BrowserWindow.getAllWindows()[0].webContents.getLastWebPreferences();
+    return { sandbox: prefs.sandbox, nodeIntegration: prefs.nodeIntegration, contextIsolation: prefs.contextIsolation };
+  });
+  assert.deepEqual(security, { sandbox: true, nodeIntegration: false, contextIsolation: true });
+  assert.equal(await page.evaluate(() => typeof window.process), 'undefined');
+  assert.equal(await page.evaluate(() => document.querySelector('meta[http-equiv="Content-Security-Policy"]').content.includes("connect-src 'none'")), true);
+  assert.deepEqual(errors, []);
+});
+
+test("External UI uses normalized IPC quotes, labels age and retains snapshots on failure", async () => {
+  await navigate("portfolio");
+  await click("cash");
+  await save();
+  const { demoMarket } = await import("../providers/mock-data.mjs");
+  // Only this isolated test process replaces IPC responses; production validates
+  // them through createMarketHandler, covered above and in market-data.test.mjs.
+  async function install(mode) {
+    await app.evaluate(({ ipcMain }, { mode, fixtures }) => {
+      ipcMain.removeHandler('market:request');
+      ipcMain.handle('market:request', async (_event, { method, args }) => {
+        if (method === 'info') return { ok: true, data: {
+          provider: mode === 'restore' ? 'mock' : 'twelve', demo: mode === 'restore',
+          label: mode === 'restore' ? 'Mock Provider · dados demonstrativos' : 'Twelve Data · B3: fim de dia; EUA: conforme plano', notice: null,
+        } };
+        if (mode === 'fail') return { ok: false, error: { code: 'NO_NETWORK' } };
+        if (method !== 'getQuotes') return { ok: false, error: { code: 'INVALID_REQUEST' } };
+        return { ok: true, data: args[0].map(asset => mode === 'restore'
+          ? fixtures.find(row => row.asset.id === asset.id).quote
+          : { asset, currency: asset.currency, price: 100, previousClose: 80, timestamp: '2025-01-02T21:00:00Z' }) };
+      });
+    }, { mode, fixtures: demoMarket });
+  }
+  try {
+    await install('success');
+    await page.addInitScript(() => { const actual = Date.now.bind(Date); Date.now = () => actual() + (window.testTimeOffset || 0); });
+    await page.reload();
+    await page.waitForFunction(() => window.InvestorMeFinance?.status().provider === 'twelve' && !window.InvestorMeFinance.status().refreshing && window.InvestorMeFinance.assets[0].price === 100);
+    await navigate('markets');
+    await page.locator('#market-search').fill('AAPL');
+    assert.match(await page.locator('tbody').textContent(), /100,00/);
+    assert.match(await page.locator('tbody').textContent(), /25,00%/);
+    assert.match(await page.locator('tbody').textContent(), /cotação antiga/);
+    assert.doesNotMatch(await page.locator('tbody').textContent(), /Demo/);
+    await navigate('portfolio');
+    assert.match(await page.locator('.market-status').textContent(), /Twelve Data/);
+    const totalBefore = await page.evaluate(() => window.InvestorMeFinance.evaluate(JSON.parse(localStorage.getItem('investorme.workspace.v1'))).marketValue);
+    assert.ok(totalBefore > 0);
+    await install('fail');
+    // Expire the renderer cache without waiting a minute.
+    await page.evaluate(() => { window.testTimeOffset = 61000; });
+    await click('market-refresh');
+    await page.waitForFunction(() => window.InvestorMeFinance.status().problems.length > 0);
+    assert.match(await page.locator('.market-status').textContent(), /NO_NETWORK/);
+    assert.equal(await page.evaluate(() => window.InvestorMeFinance.evaluate(JSON.parse(localStorage.getItem('investorme.workspace.v1'))).marketValue), totalBefore);
+    assert.deepEqual(errors, []);
+  } finally {
+    await install('restore');
+    await page.reload();
+    await page.waitForSelector('h1');
   }
 });

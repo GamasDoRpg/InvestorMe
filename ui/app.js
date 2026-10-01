@@ -134,6 +134,10 @@ try {
 } catch {
   state = defaults();
 }
+try { finance.restoreAssets(state.marketAssets); }
+catch { /* Keep persisted records for export; loading issues are made visible below. */
+  setTimeout(() => toast("Catálogo salvo inválido; dados preservados para exportação."), 0);
+}
 let page = "overview",
   period = "6M",
   marketFilter = "Todos",
@@ -152,6 +156,7 @@ function save() {
   }
 }
 function money(n, currency = "BRL") {
+  if (n === null || n === undefined) return "—";
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency,
@@ -159,6 +164,7 @@ function money(n, currency = "BRL") {
   }).format(n);
 }
 function pct(n) {
+  if (n === null || n === undefined) return "—";
   return `${n >= 0 ? "+" : ""}${n.toFixed(2).replace(".", ",")}%`;
 }
 function asset(ticker) {
@@ -219,17 +225,28 @@ function chart(kind = "area") {
       .join(" ");
   return `<div class="chart"><div class="chart-axis"><span>${kind === "risk" ? "0%" : "150 mil"}</span><span>${kind === "risk" ? "-5%" : "100 mil"}</span><span>${kind === "risk" ? "-10%" : "50 mil"}</span><span>${kind === "risk" ? "-15%" : "0"}</span></div><svg viewBox="0 0 700 210" role="img" aria-label="Ilustração de ${kind === "risk" ? "drawdown" : "evolução"} com dados fictícios, período ${period}"><defs><linearGradient id="fill-${kind}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#14db99" stop-opacity=".25"/><stop offset="100%" stop-color="#14db99" stop-opacity="0"/></linearGradient></defs>${[35, 80, 125, 170].map((y) => `<line x1="20" y1="${y}" x2="680" y2="${y}" class="gridline"/>`).join("")}<polygon points="20,190 ${points} 680,190" fill="url(#fill-${kind})"/><polyline points="${points}" fill="none" stroke="#24dba0" stroke-width="2.5" stroke-linejoin="round"/><circle cx="680" cy="${points.split(" ").at(-1).split(",")[1]}" r="4" fill="#24dba0"/></svg><div class="chart-months">${(period === "1M" ? ["Semana 1", "Semana 2", "Semana 3", "Semana 4"] : ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun"]).map((x) => `<span>${x}</span>`).join("")}</div></div>`;
 }
+function quoteFreshness(a) {
+  if (!a.quote) return '<small>Cotação indisponível</small>';
+  const old = !finance.status().demo && Date.now() - Date.parse(a.quote.timestamp) > 60000;
+  return `<small>${finance.status().demo ? "Demo · " : ""}${escapeHTML(new Date(a.quote.timestamp).toLocaleString("pt-BR"))}${old ? " · cotação antiga / possível atraso" : ""}</small>`;
+}
+async function refreshMarket() {
+  const task = finance.refresh();
+  render();
+  await task;
+  render();
+}
 function assetCell(a) {
-  return `<div class="asset-cell"><span class="asset-logo ${a.color}">${a.ticker.slice(0, 2)}</span><div><strong>${a.ticker}</strong><small>${a.name}</small></div></div>`;
+  return `<div class="asset-cell"><span class="asset-logo ${a.color}">${a.ticker.slice(0, 2)}</span><div><strong>${a.ticker}</strong><small>${escapeHTML(a.name)}</small></div></div>`;
 }
 function holdingsTable(full = false) {
   const valuation = totals();
-  return `<div class="table-wrap"><table><thead><tr><th>Ativo</th><th>Quantidade</th><th>Preço médio</th><th>Preço demo</th><th>Resultado</th>${full ? "<th>Ações</th>" : ""}</tr></thead><tbody>${
+  return `<div class="table-wrap"><table><thead><tr><th>Ativo</th><th>Quantidade</th><th>Preço médio</th><th>Preço</th><th>Resultado</th>${full ? "<th>Ações</th>" : ""}</tr></thead><tbody>${
     state.holdings
       .map((h) => {
         const a = asset(h.ticker),
           gain = valuation.positions.find((row) => row.position.id === h.id).unrealizedPL;
-        return `<tr><td><button class="cell-button" data-action="asset" data-id="${a.ticker}">${assetCell(a)}</button></td><td>${h.quantity.toLocaleString("pt-BR")}</td><td>${money(h.cost)}</td><td>${money(a.price)}</td><td class="${gain >= 0 ? "positive" : "negative"}">${money(gain)}</td>${full ? `<td><button class="text-button" data-action="edit-holding" data-id="${h.id}">Editar</button></td>` : ""}</tr>`;
+        return `<tr><td><button class="cell-button" data-action="asset" data-id="${a.ticker}">${assetCell(a)}</button></td><td>${h.quantity.toLocaleString("pt-BR")}</td><td>${money(h.cost)}</td><td>${money(a.price)}${quoteFreshness(a)}</td><td class="${gain >= 0 ? "positive" : "negative"}">${money(gain)}</td>${full ? `<td><button class="text-button" data-action="edit-holding" data-id="${h.id}">Editar</button></td>` : ""}</tr>`;
       })
       .join("") ||
     '<tr><td colspan="6" class="empty">Sua carteira está vazia. Adicione uma posição demonstrativa.</td></tr>'
@@ -238,14 +255,14 @@ function holdingsTable(full = false) {
 function allocation() {
   const t = totals(),
     total = t.total;
-  return `<div class="allocation"><div class="donut"><div><small>Patrimônio demo</small><strong>${money(total)}</strong><span>BRL</span></div></div><div class="legend">${state.holdings
+  return `<div class="allocation"><div class="donut"><div><small>Patrimônio</small><strong>${money(total)}</strong><span>BRL</span></div></div><div class="legend">${state.holdings
     .map((h, i) => {
       const weight = t.positions.find((row) => row.position.id === h.id).allocation;
-      return `<div><span class="legend-dot c${i % 5}"></span><span>${h.ticker}</span><strong>${weight.toFixed(1)}%</strong></div>`;
+      return `<div><span class="legend-dot c${i % 5}"></span><span>${h.ticker}</span><strong>${weight === null ? "—" : weight.toFixed(1)}%</strong></div>`;
     })
     .join(
       "",
-    )}<div><span class="legend-dot cash"></span><span>Caixa</span><strong>${t.cashAllocation.toFixed(1)}%</strong></div></div></div><p class="panel-note">Anel ilustrativo · Percentuais calculados com os valores demo</p>`;
+    )}<div><span class="legend-dot cash"></span><span>Caixa</span><strong>${t.cashAllocation === null ? "—" : t.cashAllocation.toFixed(1)}%</strong></div></div></div><p class="panel-note">Anel ilustrativo · Percentuais calculados com as cotações carregadas</p>`;
 }
 function overview() {
   const t = totals();
@@ -255,7 +272,7 @@ function overview() {
       button("↗ Exportar workspace", "export") +
         button("+ Adicionar posição", "add-holding", "primary"),
     ) +
-    `<div class="stats">${stat("Patrimônio total", money(t.total), "Carteira + saldo demonstrativo")}${stat("Resultado da carteira", money(t.profit), `${t.unrealizedPLPercentage === null ? "—" : pct(t.unrealizedPLPercentage)} sobre o custo`)}${stat("Estratégias ativas", state.strategies.filter((s) => s.status === "active").length, "Prontas para explorar", "◇")}${stat("Caixa disponível", money(state.cash), "Saldo editável na carteira", "◴", "muted")}</div><div class="grid overview-grid">${panel("Evolução da carteira", `<div class="chart-head"><strong>${money(t.total)}</strong><span class="subtle">Visualização ilustrativa</span>${badge("DADOS DEMO", "neutral")}</div>${chart()}`, periods())}${panel("Seu próximo movimento", `<div class="insight-icon">✦</div><h3>Da ideia à estratégia.</h3><p>Combine regras e explore novas possibilidades em um ambiente de pesquisa.</p>${button("Explorar estratégias ↗", "go-strategies", "primary")}<div class="insight-bottom"><span class="demo-dot"></span> Nenhuma operação real será enviada.</div>`, "", "insight-panel")}</div><div class="grid lower-grid">${panel("Posições da carteira", holdingsTable(), button("Ver carteira ↗", "go-portfolio", "text"))}${panel("Workspace em foco", `<div class="activity"><span class="activity-symbol green">◇</span><div><strong>${state.strategies.length} estratégias na biblioteca</strong><small>Crie, edite e pause suas ideias.</small></div></div><div class="activity"><span class="activity-symbol blue">⬡</span><div><strong>${state.models.length} modelos de pesquisa</strong><small>Configure seu laboratório.</small></div></div><div class="activity"><span class="activity-symbol purple">♧</span><div><strong>${state.alerts.filter((a) => a.enabled).length} regras de alerta ativas</strong><small>Regras demonstrativas, sem monitoramento real.</small></div></div><div class="small-callout">Seu progresso fica salvo neste dispositivo.</div>`)}</div>`
+    `<div class="stats">${stat("Patrimônio total", money(t.total), finance.modeLabel())}${stat("Resultado da carteira", money(t.profit), `${t.unrealizedPLPercentage === null ? "—" : pct(t.unrealizedPLPercentage)} sobre o custo`)}${stat("Estratégias ativas", state.strategies.filter((s) => s.status === "active").length, "Prontas para explorar", "◇")}${stat("Caixa disponível", money(state.cash), "Saldo editável na carteira", "◴", "muted")}</div><div class="grid overview-grid">${panel("Evolução da carteira", `<div class="chart-head"><strong>${money(t.total)}</strong><span class="subtle">Visualização ilustrativa</span>${badge("DADOS DEMO", "neutral")}</div>${chart()}`, periods())}${panel("Seu próximo movimento", `<div class="insight-icon">✦</div><h3>Da ideia à estratégia.</h3><p>Combine regras e explore novas possibilidades em um ambiente de pesquisa.</p>${button("Explorar estratégias ↗", "go-strategies", "primary")}<div class="insight-bottom"><span class="demo-dot"></span> Nenhuma operação real será enviada.</div>`, "", "insight-panel")}</div><div class="grid lower-grid">${panel("Posições da carteira", holdingsTable(), button("Ver carteira ↗", "go-portfolio", "text"))}${panel("Workspace em foco", `<div class="activity"><span class="activity-symbol green">◇</span><div><strong>${state.strategies.length} estratégias na biblioteca</strong><small>Crie, edite e pause suas ideias.</small></div></div><div class="activity"><span class="activity-symbol blue">⬡</span><div><strong>${state.models.length} modelos de pesquisa</strong><small>Configure seu laboratório.</small></div></div><div class="activity"><span class="activity-symbol purple">♧</span><div><strong>${state.alerts.filter((a) => a.enabled).length} regras de alerta ativas</strong><small>Regras demonstrativas, sem monitoramento real.</small></div></div><div class="small-callout">Seu progresso fica salvo neste dispositivo.</div>`)}</div>`
   );
 }
 function portfolio() {
@@ -266,7 +283,7 @@ function portfolio() {
       button("Editar caixa", "cash") +
         button("+ Adicionar posição", "add-holding", "primary"),
     ) +
-    `<div class="stats">${stat("Patrimônio total", money(t.total), "Valores demonstrativos")}${stat("Capital investido", money(t.invested), `${state.holdings.length} posições na carteira`, "◴", "muted")}${stat("Resultado", money(t.profit), "Calculado a partir dos preços demo")}${stat("Caixa", money(state.cash), "Disponível para simulação", "◈", "muted")}</div><div class="grid two-cols">${panel("Alocação da carteira", allocation())}${panel("Evolução ilustrativa", chart(), periods())}</div>${panel("Todas as posições", holdingsTable(true), badge("BRL · DEMO", "neutral"))}`
+    `<div class="stats">${stat("Patrimônio total", money(t.total), finance.modeLabel())}${stat("Capital investido", money(t.invested), `${state.holdings.length} posições na carteira`, "◴", "muted")}${stat("Resultado", money(t.profit), "Calculado a partir das cotações carregadas")}${stat("Caixa", money(state.cash), "Disponível para simulação", "◈", "muted")}</div><div class="grid two-cols">${panel("Alocação da carteira", allocation())}${panel("Evolução ilustrativa", chart(), periods())}</div>${panel("Todas as posições", holdingsTable(true), badge("BRL · " + finance.modeLabel(), "neutral"))}`
   );
 }
 function markets() {
@@ -278,10 +295,10 @@ function markets() {
         .includes(assetQuery.toLowerCase()),
   );
   return (
-    heading("Mercados", button("★ Minha watchlist", "watchlist")) +
+    heading("Mercados", button("Consultar provedor", "market-search") + button("★ Minha watchlist", "watchlist")) +
     panel(
       "Universo de ativos",
-      `<div class="filterbar"><div class="segments">${["Todos", "Brasil", "EUA"].map((p) => `<button data-action="market-filter" data-id="${p}" class="${marketFilter === p ? "selected" : ""}">${p}</button>`).join("")}</div><input id="market-search" type="search" placeholder="Filtrar por nome ou ticker…" aria-label="Filtrar ativos" value="${escapeHTML(assetQuery)}"></div><div class="table-wrap"><table><thead><tr><th>Ativo</th><th>Mercado</th><th>Setor</th><th>Preço demo</th><th>Variação demo</th><th>Watchlist</th></tr></thead><tbody>${list.map((a) => `<tr><td><button class="cell-button" data-action="asset" data-id="${a.ticker}">${assetCell(a)}</button></td><td>${a.market}</td><td>${a.sector}</td><td>${money(a.price, a.currency)}</td><td class="${a.change >= 0 ? "positive" : "negative"}">${pct(a.change)}</td><td><button class="star-button ${state.watchlist.includes(a.ticker) ? "starred" : ""}" data-action="star" data-id="${a.ticker}" aria-label="${state.watchlist.includes(a.ticker) ? "Remover" : "Adicionar"} ${a.ticker} ${state.watchlist.includes(a.ticker) ? "da" : "à"} watchlist" aria-pressed="${state.watchlist.includes(a.ticker)}">${state.watchlist.includes(a.ticker) ? "★" : "☆"}</button></td></tr>`).join("") || '<tr><td colspan="6" class="empty">Nenhum ativo encontrado.</td></tr>'}</tbody></table></div>`,
+      `<div class="filterbar"><div class="segments">${["Todos", "Brasil", "EUA"].map((p) => `<button data-action="market-filter" data-id="${p}" class="${marketFilter === p ? "selected" : ""}">${p}</button>`).join("")}</div><input id="market-search" type="search" placeholder="Filtrar por nome ou ticker…" aria-label="Filtrar ativos" value="${escapeHTML(assetQuery)}"></div><div class="table-wrap"><table><thead><tr><th>Ativo</th><th>Mercado</th><th>Setor</th><th>Preço</th><th>Variação</th><th>Watchlist</th></tr></thead><tbody>${list.map((a) => `<tr><td><button class="cell-button" data-action="asset" data-id="${a.ticker}">${assetCell(a)}</button></td><td>${escapeHTML(a.market)}</td><td>${escapeHTML(a.sector)}</td><td>${money(a.price, a.currency)}${quoteFreshness(a)}</td><td class="${a.change >= 0 ? "positive" : "negative"}">${pct(a.change)}</td><td><button class="star-button ${state.watchlist.includes(a.ticker) ? "starred" : ""}" data-action="star" data-id="${a.ticker}" aria-label="${state.watchlist.includes(a.ticker) ? "Remover" : "Adicionar"} ${a.ticker} ${state.watchlist.includes(a.ticker) ? "da" : "à"} watchlist" aria-pressed="${state.watchlist.includes(a.ticker)}">${state.watchlist.includes(a.ticker) ? "★" : "☆"}</button></td></tr>`).join("") || '<tr><td colspan="6" class="empty">Nenhum ativo encontrado.</td></tr>'}</tbody></table></div>`,
       badge(`${list.length} ATIVOS`, "neutral"),
     )
   );
@@ -327,13 +344,13 @@ function backtests() {
 }
 function risk() {
   const t = totals(),
-    max = Math.max(0, ...t.positions.map((row) => row.investedAllocation));
+    max = t.value === null ? null : Math.max(0, ...t.positions.map((row) => row.investedAllocation));
   return (
     heading(
       "Gestão de risco",
       button("Ajustar limites", "risk-limits", "primary"),
     ) +
-    `<div class="stats three">${stat("Maior posição", max.toFixed(1) + "%", max > state.risk.position ? "Acima do limite configurado" : "Dentro do limite configurado", "⬟", max > state.risk.position ? "negative" : "positive")}${stat("Limite por posição", state.risk.position + "%", "Parâmetro local editável", "◈", "muted")}${stat("Limite de drawdown", state.risk.drawdown + "%", "Sem monitoramento real", "⌁", "muted")}</div><div class="grid two-cols">${panel("Exposição da carteira", allocation())}${panel("Drawdown ilustrativo", chart("risk"), periods())}</div><div class="grid two-cols">${panel("Limites de pesquisa", `<dl class="details"><div><dt>Máximo por posição</dt><dd>${state.risk.position}%</dd></div><div><dt>Máximo por setor</dt><dd>${state.risk.sector}%</dd></div><div><dt>Drawdown máximo</dt><dd>${state.risk.drawdown}%</dd></div></dl><p class="panel-note">Parâmetros salvos para futuras integrações.</p>`)}${panel("Cenários de estresse", `<p>Explore o efeito aritmético de uma queda uniforme nos preços demo da carteira.</p><label>Cenário<select id="stress-scenario"><option value="10">Correção moderada · −10%</option><option value="20">Queda acentuada · −20%</option><option value="35">Choque de mercado · −35%</option></select></label><div class="detail-actions">${button("Calcular cenário", "stress", "primary")}</div><div id="stress-result" aria-live="polite"></div>`)}</div>`
+    `<div class="stats three">${stat("Maior posição", (max === null ? "—" : max.toFixed(1) + "%"), max === null ? "Cotação indisponível" : max > state.risk.position ? "Acima do limite configurado" : "Dentro do limite configurado", "⬟", max > state.risk.position ? "negative" : "positive")}${stat("Limite por posição", state.risk.position + "%", "Parâmetro local editável", "◈", "muted")}${stat("Limite de drawdown", state.risk.drawdown + "%", "Sem monitoramento real", "⌁", "muted")}</div><div class="grid two-cols">${panel("Exposição da carteira", allocation())}${panel("Drawdown ilustrativo", chart("risk"), periods())}</div><div class="grid two-cols">${panel("Limites de pesquisa", `<dl class="details"><div><dt>Máximo por posição</dt><dd>${state.risk.position}%</dd></div><div><dt>Máximo por setor</dt><dd>${state.risk.sector}%</dd></div><div><dt>Drawdown máximo</dt><dd>${state.risk.drawdown}%</dd></div></dl><p class="panel-note">Parâmetros salvos para futuras integrações.</p>`)}${panel("Cenários de estresse", `<p>Explore o efeito aritmético de uma queda uniforme nas cotações carregadas.</p><label>Cenário<select id="stress-scenario"><option value="10">Correção moderada · −10%</option><option value="20">Queda acentuada · −20%</option><option value="35">Choque de mercado · −35%</option></select></label><div class="detail-actions">${button("Calcular cenário", "stress", "primary")}</div><div id="stress-result" aria-live="polite"></div>`)}</div>`
   );
 }
 function alerts() {
@@ -384,7 +401,7 @@ function settings() {
             `<div class="setting-row"><div><strong>${l}</strong><small>${d}</small></div><button class="switch ${state.notifications[k] ? "on" : ""}" data-action="notification-pref" data-id="${k}" role="switch" aria-checked="${state.notifications[k]}" aria-label="${l}"></button></div>`,
         )
         .join("")}`,
-    )}${panel("Dados & workspace", `<div class="setting-row"><div><strong>Exportar configurações</strong><small>Baixe suas posições, regras e preferências em JSON.</small></div>${button("Exportar", "export")}</div><div class="setting-row"><div><strong>Restaurar demonstração</strong><small>Substitui suas alterações pelos exemplos iniciais.</small></div>${button("Restaurar", "reset", "danger")}</div><div class="small-callout">Provedores de mercado, corretoras e execução real ainda não estão conectados.</div>`)}</div>`
+    )}${panel("Dados & workspace", `<div class="setting-row"><div><strong>Exportar configurações</strong><small>Baixe suas posições, regras e preferências em JSON.</small></div>${button("Exportar", "export")}</div><div class="setting-row"><div><strong>Restaurar demonstração</strong><small>Substitui suas alterações pelos exemplos iniciais.</small></div>${button("Restaurar", "reset", "danger")}</div><div class="small-callout">${escapeHTML(finance.modeLabel())}. Corretoras e execução real não estão conectadas.</div>`)}</div>`
   );
 }
 const renderers = {
@@ -446,6 +463,16 @@ function render() {
       panel("Verifique os dados da carteira", `<p role="alert">${escapeHTML(error.message)}</p><p>Os dados foram preservados. Corrija ou exclua a posição inválida.</p>${state.holdings.map(h => `<div>${escapeHTML(h.ticker)} ${button("Editar", "edit-holding", "", h.id)} ${button("Excluir", "delete-holding", "danger", h.id)}</div>`).join("")}`);
   }
   renderSectionNavigation();
+  if (["overview", "portfolio", "positions", "allocation", "risk", "markets"].includes(page)) {
+    const info = finance.status();
+    const banner = document.createElement("div");
+    banner.className = "small-callout market-status";
+    banner.setAttribute("role", "status");
+    banner.innerHTML = `<strong>${escapeHTML(info.label)}</strong> ${button(info.refreshing ? "Carregando…" : "Atualizar cotações", "market-refresh")}<p>${escapeHTML(info.notice || (info.demo ? "Preços fictícios; nenhuma conexão externa." : "Timestamp do provedor em cada cotação. B3: fim de dia. Sem garantia de tempo real."))}</p>${info.oldestQuote ? `<p>Cotação mais antiga carregada: ${escapeHTML(new Date(info.oldestQuote).toLocaleString("pt-BR"))}</p>` : ""}${info.problems.map(message => `<p>${escapeHTML(message)} Valores anteriores, quando disponíveis, foram mantidos.</p>`).join("")}`;
+    $(".page-heading", $("#main")).after(banner);
+  }
+  $(".demo-badge").textContent = finance.status().demo ? "Modo demo" : "Dados externos";
+  $(".sandbox-card").innerHTML = `<span class="demo-dot"></span> ${finance.status().demo ? "Ambiente demonstrativo" : "Dados externos"}<p>Pesquisa local.<br />Nenhuma operação real.</p>`;
 }
 function route() {
   const id = routeId(location.hash.slice(1));
@@ -509,7 +536,7 @@ function editHolding(id) {
           .map((a) => [a.ticker, a.ticker + " · " + a.name]),
         h?.ticker,
       ) +
-        `<div class="form-row">${field("Quantidade", "quantity", h?.quantity ?? 100, "number", 'min="1" max="100000000" step="1"')}${field("Preço médio (R$)", "cost", h?.cost ?? 30, "number", 'min="0.01" max="1000000000" step="0.01"')}</div><p class="panel-note">Preços fictícios. Nenhuma ordem será enviada.</p>`,
+        `<div class="form-row">${field("Quantidade", "quantity", h?.quantity ?? 100, "number", 'min="1" max="100000000" step="1"')}${field("Preço médio (R$)", "cost", h?.cost ?? 30, "number", 'min="0.01" max="1000000000" step="0.01"')}</div><p class="panel-note">${escapeHTML(finance.modeLabel())}. Nenhuma ordem será enviada.</p>`,
       id,
       h ? button("Excluir", "delete-holding", "danger", id) : "",
     ),
@@ -648,8 +675,8 @@ async function simulate(title, onDone) {
 function showAsset(ticker) {
   const a = asset(ticker);
   openModal(
-    `${a.ticker} · ${a.name}`,
-    `<div class="asset-modal-head">${assetCell(a)}${badge("DADOS FICTÍCIOS", "neutral")}</div><div class="asset-price">${money(a.price, a.currency)} <small class="${a.change >= 0 ? "positive" : "negative"}">${pct(a.change)}</small></div><dl class="details"><div><dt>Mercado</dt><dd>${a.market}</dd></div><div><dt>Setor</dt><dd>${a.sector}</dd></div></dl><div class="modal-footer">${button(state.watchlist.includes(ticker) ? "★ Remover da watchlist" : "☆ Adicionar à watchlist", "modal-star", "", ticker)}${a.market === "Brasil" ? button("+ Adicionar posição", "asset-position", "primary", ticker) : ""}</div>`,
+    `${a.ticker} · ${escapeHTML(a.name)}`,
+    `<div class="asset-modal-head">${assetCell(a)}${badge(finance.modeLabel(), "neutral")}</div><div class="asset-price">${money(a.price, a.currency)} <small class="${a.change >= 0 ? "positive" : "negative"}">${pct(a.change)}</small>${quoteFreshness(a)}</div><dl class="details"><div><dt>Mercado</dt><dd>${escapeHTML(a.market)}</dd></div><div><dt>Setor</dt><dd>${escapeHTML(a.sector)}</dd></div></dl><div class="modal-footer">${button("Histórico diário", "market-history", "", ticker)}${button(state.watchlist.includes(ticker) ? "★ Remover da watchlist" : "☆ Adicionar à watchlist", "modal-star", "", ticker)}${a.market === "Brasil" ? button("+ Adicionar posição", "asset-position", "primary", ticker) : ""}</div>`,
   );
 }
 function showSearch() {
@@ -673,7 +700,7 @@ function renderSearch(query) {
       .filter((a) => (a.ticker + " " + a.name).toLowerCase().includes(q))
       .map(
         (a) =>
-          `<button class="search-result" data-action="asset" data-id="${a.ticker}">${assetCell(a)}<small>Ativo demo ↗</small></button>`,
+          `<button class="search-result" data-action="asset" data-id="${a.ticker}">${assetCell(a)}<small>Ativo ↗</small></button>`,
       )
       .join("");
   if (!$("#search-results").children.length)
@@ -733,6 +760,25 @@ document.addEventListener("click", async (event) => {
     return;
   }
   switch (action) {
+    case "market-refresh":
+      await refreshMarket();
+      break;
+    case "market-search":
+      try {
+        await finance.searchAssets(assetQuery);
+        state.marketAssets = finance.assets.map(row => row.asset);
+        save();
+        render();
+      } catch (error) { toast(error.message); }
+      break;
+    case "market-history":
+      try {
+        const end = new Date().toISOString().slice(0, 10);
+        const start = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+        const candles = await finance.getHistory(id, { timeframe: "1d", start, end });
+        openModal("Histórico diário · " + escapeHTML(id), `<p>${escapeHTML(finance.modeLabel())}. Datas de sessão; OHLCV sem indicadores. Últimos 30 dias.</p><div class="table-wrap"><table><thead><tr><th>Data</th><th>Abertura</th><th>Máxima</th><th>Mínima</th><th>Fechamento</th><th>Volume</th></tr></thead><tbody>${candles.map(c => `<tr><td>${c.timestamp.slice(0,10)}</td><td>${money(c.open, asset(id).currency)}</td><td>${money(c.high, asset(id).currency)}</td><td>${money(c.low, asset(id).currency)}</td><td>${money(c.close, asset(id).currency)}</td><td>${c.volume}</td></tr>`).join("") || '<tr><td colspan="6">Sem dados no período.</td></tr>'}</tbody></table></div>`);
+      } catch (error) { toast(error.message); }
+      break;
     case "close-modal":
       closeModal();
       break;
@@ -878,6 +924,7 @@ document.addEventListener("click", async (event) => {
     case "stress": {
       const drop = Number($("#stress-scenario").value) / 100,
         t = totals();
+      if (t.value === null) { toast("Cotações indisponíveis para calcular o cenário."); break; }
       $("#stress-result").innerHTML =
         `<div class="small-callout"><strong>Impacto: <span class="negative">−${money(t.value * drop)}</span></strong><p>Patrimônio após o cenário: ${money(t.total - t.value * drop)}. Caixa preservado. Cálculo simplificado, sem previsão de mercado.</p></div>`;
       break;
@@ -1138,3 +1185,4 @@ window.desktop?.onMaximized((maximized) => {
   b.setAttribute("aria-label", maximized ? "Restaurar janela" : "Maximizar");
 });
 route();
+void refreshMarket();
