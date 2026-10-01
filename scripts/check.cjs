@@ -9,5 +9,5 @@ function check(directory) {
       execFileSync(process.execPath, ["--check", file], { stdio: "inherit" });
   }
 }
-for (const directory of ["core", "ui", "desktop", "scripts", "tests"])
+for (const directory of ["core", "providers", "ui", "desktop", "scripts", "tests"])
   check(directory);

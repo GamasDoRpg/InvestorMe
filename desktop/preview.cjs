@@ -2,13 +2,26 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const uiRoot = path.resolve(__dirname, "../ui");
-const coreRoot = path.resolve(__dirname, "../core");
+const roots = {
+  core: path.resolve(__dirname, "../core"),
+  providers: path.resolve(__dirname, "../providers"),
+};
+const publicProviders = new Set([
+  "/providers/MockMarketDataProvider.mjs",
+  "/providers/mock-data.mjs",
+]);
 http
   .createServer((req, res) => {
     const pathname = new URL(req.url, "http://localhost").pathname;
-    const isCore = pathname.startsWith("/core/");
-    const root = isCore ? coreRoot : uiRoot;
-    const resource = isCore ? pathname.slice(5) : pathname;
+    const group = pathname.split("/")[1];
+    if (group === "providers" && !publicProviders.has(pathname)) {
+      res.writeHead(404).end();
+      return;
+    }
+    const root = Object.hasOwn(roots, group) ? roots[group] : uiRoot;
+    const resource = Object.hasOwn(roots, group)
+      ? pathname.slice(group.length + 1)
+      : pathname;
     const file = path.resolve(
       root,
       "." + (resource === "/" ? "/index.html" : resource),

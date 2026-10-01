@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs/promises");
+const { pathToFileURL } = require("node:url");
 let window;
 function createWindow() {
   window = new BrowserWindow({
@@ -31,7 +32,15 @@ function createWindow() {
   window.loadFile(path.join(__dirname, "..", "ui", "index.html"));
 }
 function trusted(event) {
-  return window && event.sender === window.webContents;
+  const expected = pathToFileURL(
+    path.join(__dirname, "..", "ui", "index.html"),
+  ).href;
+  return (
+    window &&
+    event.sender === window.webContents &&
+    event.senderFrame === window.webContents.mainFrame &&
+    event.senderFrame.url.split("#")[0] === expected
+  );
 }
 ipcMain.on("window:action", (event, action) => {
   if (!trusted(event)) return;
@@ -52,7 +61,17 @@ ipcMain.handle("workspace:export", async (event, data) => {
   await fs.writeFile(result.filePath, data, "utf8");
   return true;
 });
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+  const { createMarketBackend, createMarketHandler } =
+    await import("./market-data.mjs");
+  const backend = createMarketBackend({
+    MARKET_DATA_PROVIDER: process.env.MARKET_DATA_PROVIDER,
+    TWELVE_DATA_API_KEY: process.env.TWELVE_DATA_API_KEY,
+    MARKET_DATA_DEBUG: process.env.MARKET_DATA_DEBUG,
+  });
+  ipcMain.handle("market:request", createMarketHandler(backend, trusted));
+  createWindow();
+});
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });

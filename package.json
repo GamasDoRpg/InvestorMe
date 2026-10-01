@@ -29,7 +29,9 @@
       "ui/**/*",
       "package.json",
       "desktop/icon.png",
-      "core/**/*.mjs"
+      "core/**/*.mjs",
+      "desktop/market-data.mjs",
+      "providers/**/*.mjs"
     ],
     "win": {
       "target": [
