@@ -26,9 +26,28 @@ const click = (action) =>
 const fill = (name, value) => page.locator(`[name="${name}"]`).fill(value);
 const save = () => page.locator('button[type="submit"]').click();
 async function navigate(id) {
-  await page.locator(`nav a[href="#${id}"]`).click();
-  await page.waitForSelector(`nav a[href="#${id}"][aria-current="page"]`);
+  const lab = ["strategies", "models", "scripts", "backtests"];
+  const portfolio = [
+    "positions",
+    "performance",
+    "income",
+    "allocation",
+    "risk",
+  ];
+  if (lab.includes(id)) {
+    await page.locator('#navigation a[href="#lab/strategies"]').click();
+    await page.locator(`.section-tabs a[href="#lab/${id}"]`).click();
+  } else if (portfolio.includes(id)) {
+    await page.locator('#navigation a[href="#portfolio"]').click();
+    await page.locator(`.section-tabs a[href="#portfolio/${id}"]`).click();
+  } else if (id === "alerts")
+    await page.locator('[data-action="notifications"]').click();
+  else if (id === "settings")
+    await page.locator('[data-action="go-settings"]').click();
+  else await page.locator(`#navigation a[href="#${id}"]`).click();
+  await page.waitForSelector(`main[data-page="${id}"]`);
 }
+
 test("Every page renders without horizontal window overflow at desktop sizes", async () => {
   for (const width of [1480, 1024]) {
     await page.setViewportSize({ width, height: 900 });
@@ -99,10 +118,10 @@ test("Search, watchlist and market filters respond", async () => {
   await page.keyboard.press("Control+k");
   await page.locator("#global-search").fill("Gestão de risco");
   await click("search-page");
-  await page.waitForSelector('nav a[href="#risk"][aria-current="page"]');
+  await page.waitForSelector('main[data-page="risk"]');
   assert.equal(
     await page.locator("#breadcrumb").textContent(),
-    "Gestão de risco",
+    "Carteira / Gestão de risco",
   );
 });
 test("Strategy creation, pause, backtest validation and demo history", async () => {
@@ -128,7 +147,7 @@ test("Strategy creation, pause, backtest validation and demo history", async () 
   await fill("end", "2025-12-31");
   await save();
   await page.waitForSelector("dialog:not([open])", { state: "attached" });
-  await page.waitForFunction(() => location.hash === "#backtests");
+  await page.waitForFunction(() => location.hash === "#lab/backtests");
   assert.match(
     await page.locator("tbody").textContent(),
     /Estratégia de teste/,
@@ -314,5 +333,78 @@ test("Every page can enter customization with stable widget IDs", async () => {
     );
     await page.locator('[data-layout="done"]').click();
   }
+  assert.deepEqual(errors, []);
+});
+
+test("Four main areas, internal sections and legacy links remain accessible", async () => {
+  assert.deepEqual(await page.locator("#navigation a").allTextContents(), [
+    "◈Visão geral",
+    "◴Carteira",
+    "▥Mercados",
+    "⬡Laboratório",
+  ]);
+  for (const id of [
+    "positions",
+    "performance",
+    "income",
+    "allocation",
+    "scripts",
+  ]) {
+    await navigate(id);
+    assert.ok(await page.locator("h1").innerText());
+    await page.locator('[data-layout="edit"]').click();
+    assert.ok(await page.locator(".layout-widget").count());
+    await page.locator('[data-layout="done"]').click();
+  }
+  await page.evaluate(() => {
+    location.hash = "models";
+  });
+  await page.waitForSelector('main[data-page="models"]');
+  assert.match(page.url(), /#lab\/models$/);
+  await navigate("alerts");
+  await navigate("settings");
+  assert.deepEqual(errors, []);
+});
+
+test("Script editor saves inert code and strategy/model associations", async () => {
+  await navigate("scripts");
+  await page.locator('[data-script="new"]').click();
+  await fill("name", "modelo.py");
+  await save();
+  const code =
+    'document.body.innerHTML = "EXECUTED";\n<script>alert(1)</script>';
+  await page.locator("#script-source").fill(code);
+  await page.keyboard.press("Control+s");
+  await navigate("models");
+  await navigate("scripts");
+  assert.equal(await page.locator("#script-source").inputValue(), code);
+  await page.reload();
+  await page.waitForSelector("#script-source");
+  assert.equal(await page.locator("#script-source").inputValue(), code);
+  await page.locator('[data-script="properties"]').click();
+  await page.locator('[name="strategyId"]').selectOption({ index: 1 });
+  await page.locator('[name="modelId"]').selectOption({ index: 1 });
+  await save();
+  await navigate("strategies");
+  await page.locator('[data-action="select-strategy"]').first().click();
+  assert.equal(await page.locator('[data-script="open-script"]').count(), 1);
+  await page.locator('[data-script="links"]').click();
+  await page.locator('[name="model"]').first().check();
+  await save();
+  await page.locator('[data-script="open-model"]').click();
+  await page.waitForSelector('main[data-page="models"]');
+  await navigate("strategies");
+  await page.locator("[data-strategy-tests]").click();
+  await page.waitForSelector('main[data-page="backtests"]');
+  assert.notEqual(await page.locator("#test-strategy-filter").inputValue(), "");
+  await navigate("strategies");
+  await page.locator('[data-script="open-script"]').click();
+  await page.waitForSelector('main[data-page="scripts"]');
+  assert.equal(await page.locator("#script-source").inputValue(), code);
+  await page.locator('[data-script="duplicate"]').click();
+  assert.equal(await page.locator(".script-item").count(), 2);
+  await page.locator('[data-script="delete"]').click();
+  await page.locator('[data-script="confirm-delete"]').click();
+  assert.equal(await page.locator(".script-item").count(), 1);
   assert.deepEqual(errors, []);
 });

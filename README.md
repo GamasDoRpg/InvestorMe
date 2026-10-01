@@ -31,7 +31,7 @@ InvestorMe opens as a desktop window with minimize, maximize/restore, and close 
 
 ### What works in this preview
 
-- Nine pages: overview, portfolio, markets, strategies, models, backtests, risk, alerts, and settings.
+- Four main areas: Overview, Portfolio, Markets, and Laboratory. Portfolio and Laboratory use internal sections; alerts are opened from the bell and settings from the profile gear.
 - Add, edit, and delete Brazilian equity positions; edit cash; calculate totals using static demo prices.
 - Filter example assets, inspect details, manage a watchlist, and search pages/assets with `Ctrl+K`.
 - Create/edit/delete strategies, change their local active/paused state, and configure position limits.
@@ -43,6 +43,23 @@ InvestorMe opens as a desktop window with minimize, maximize/restore, and close 
 - Persist the workspace locally, export it to JSON through a native save dialog, and restore the initial demo after confirmation.
 
 All prices, charts, and market changes are **demonstrative**. Charts are illustrations, not financial outputs. Model training, backtesting, alert monitoring, brokerage connections, authentication, and live trading are **not implemented**. The active strategy switch only changes its saved local state. Exported JSON is a snapshot; importing is not implemented yet.
+
+### Navigation and research workspace
+
+| Main area | Frontend sections and purpose |
+| --- | --- |
+| Overview | Summary of portfolio, positions and research activity. |
+| Portfolio | Summary, Positions, Performance, Income, Allocation and Risk. Existing demo positions and risk controls remain available. Income currently shows an explicit empty state; no income engine is implemented. |
+| Markets | Demo asset search, filters, watchlist and asset details. |
+| Laboratory | Strategies, Models, Scripts and Tests in one workspace. |
+
+Alerts remain accessible from the bell in the header. Settings are available through the profile/gear at the bottom of the sidebar and through global search.
+
+The Scripts section provides local file creation, editing, renaming, duplication and deletion. Python and JavaScript are metadata choices for the editor, **not execution environments**. Source text is saved automatically, survives navigation/reopening, and is included in workspace JSON exports. `Ctrl+S` also saves; Tab inserts four spaces. No source code is evaluated, imported, compiled or run.
+
+Strategies can reference reusable models and associated scripts. The strategy details open linked models/scripts and filter the test history for that strategy. Models also show their linked scripts. New backtest records store the strategy ID; older records retain their name snapshot and are matched by name when available. These links organize the frontend only and do not run a research pipeline.
+
+Canonical routes use `#lab/strategies`, `#lab/models`, `#lab/scripts`, `#lab/backtests`, and `#portfolio/risk` (with equivalent portfolio sections). Legacy `#strategies`, `#models`, `#backtests` and `#risk` links still resolve. Existing workspace and layout keys are preserved so earlier positions, models, strategies and panel arrangements continue to load.
 
 ### Customize a page
 

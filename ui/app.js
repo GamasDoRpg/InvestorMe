@@ -17,7 +17,12 @@ const pages = [
   ["markets", "Mercados", "▥"],
   ["strategies", "Estratégias", "◇"],
   ["models", "Modelos", "⬡"],
-  ["backtests", "Backtests", "⌁"],
+  ["backtests", "Testes", "⌁"],
+  ["scripts", "Scripts", "⌘"],
+  ["positions", "Posições", "◴"],
+  ["performance", "Desempenho", "⌁"],
+  ["income", "Rendimentos", "◴"],
+  ["allocation", "Alocação", "◈"],
   ["risk", "Gestão de risco", "⬟"],
   ["alerts", "Alertas", "♧"],
   ["settings", "Configurações", "⚙"],
@@ -187,6 +192,7 @@ const defaults = () => ({
   notifications: { price: true, portfolio: true, news: false },
   risk: { position: 25, sector: 40, drawdown: 15 },
   backtests: [],
+  scripts: [],
 });
 let state;
 try {
@@ -362,22 +368,33 @@ function strategies() {
       "Estratégias",
       button("+ Nova estratégia", "add-strategy", "primary"),
     ) +
-    `<div class="grid strategy-grid"><section class="strategy-library"><div class="section-label">BIBLIOTECA <span>${state.strategies.length}</span></div>${state.strategies.map((x) => `<button class="strategy-card ${s?.id === x.id ? "active" : ""}" data-action="select-strategy" data-id="${x.id}"><div class="strategy-card-top"><span class="activity-symbol ${x.type === "Value" ? "purple" : "green"}">${x.type === "Dividendos" ? "◴" : "▥"}</span>${badge(x.status === "active" ? "Ativa" : "Pausada", x.status === "active" ? "green" : "neutral")}</div><h3>${escapeHTML(x.name)}</h3><p>${escapeHTML(x.type)} · ${escapeHTML(x.universe)}</p><div class="strategy-card-foot"><span>Limite por posição</span><strong>${x.limit}%</strong></div></button>`).join("") || '<div class="empty">Crie sua primeira estratégia.</div>'}</section><div>${s ? panel(escapeHTML(s.name), `<div class="strategy-detail-tags">${badge(s.type, "blue")}${badge("SIMULAÇÃO", "neutral")}${badge(s.status === "active" ? "Ativa" : "Pausada", s.status === "active" ? "green" : "neutral")}</div><div class="rule"><span>01</span><div><small>UNIVERSO</small><strong>${escapeHTML(s.universe)}</strong></div></div><div class="rule"><span>02</span><div><small>CONDIÇÃO DE ENTRADA</small><strong>${escapeHTML(s.rule)}</strong></div></div><div class="rule"><span>03</span><div><small>GESTÃO DE CAPITAL</small><strong>Até ${s.limit}% do capital por posição</strong></div></div><div class="detail-actions">${button(s.status === "active" ? "Ⅱ Pausar estratégia" : "▷ Ativar estratégia", "toggle-strategy", "", s.id)}${button("Criar backtest ↗", "strategy-backtest", "primary", s.id)}</div><div class="small-callout">Ativar altera o estado local. A execução de estratégias será implementada em uma próxima etapa.</div>`, button("Editar regras", "edit-strategy", "text", s.id)) : panel("Sua biblioteca começa aqui", '<div class="empty">Adicione uma estratégia para configurar suas regras.</div>')}</div></div>`
+    `<div class="grid strategy-grid"><section class="strategy-library"><div class="section-label">BIBLIOTECA <span>${state.strategies.length}</span></div>${state.strategies.map((x) => `<button class="strategy-card ${s?.id === x.id ? "active" : ""}" data-action="select-strategy" data-id="${x.id}"><div class="strategy-card-top"><span class="activity-symbol ${x.type === "Value" ? "purple" : "green"}">${x.type === "Dividendos" ? "◴" : "▥"}</span>${badge(x.status === "active" ? "Ativa" : "Pausada", x.status === "active" ? "green" : "neutral")}</div><h3>${escapeHTML(x.name)}</h3><p>${escapeHTML(x.type)} · ${escapeHTML(x.universe)}</p><div class="strategy-card-foot"><span>Limite por posição</span><strong>${x.limit}%</strong></div></button>`).join("") || '<div class="empty">Crie sua primeira estratégia.</div>'}</section><div>${s ? panel(escapeHTML(s.name), `<div class="strategy-detail-tags">${badge(s.type, "blue")}${badge("SIMULAÇÃO", "neutral")}${badge(s.status === "active" ? "Ativa" : "Pausada", s.status === "active" ? "green" : "neutral")}</div><div class="rule"><span>01</span><div><small>UNIVERSO</small><strong>${escapeHTML(s.universe)}</strong></div></div><div class="rule"><span>02</span><div><small>CONDIÇÃO DE ENTRADA</small><strong>${escapeHTML(s.rule)}</strong></div></div><div class="rule"><span>03</span><div><small>GESTÃO DE CAPITAL</small><strong>Até ${s.limit}% do capital por posição</strong></div></div>${linkedComponents(s)}<div class="detail-actions">${button(s.status === "active" ? "Ⅱ Pausar estratégia" : "▷ Ativar estratégia", "toggle-strategy", "", s.id)}${button("Criar backtest ↗", "strategy-backtest", "primary", s.id)}</div><div class="small-callout">Ativar altera o estado local. A execução de estratégias será implementada em uma próxima etapa.</div>`, button("Editar regras", "edit-strategy", "text", s.id)) : panel("Sua biblioteca começa aqui", '<div class="empty">Adicione uma estratégia para configurar suas regras.</div>')}</div></div>`
   );
 }
 function models() {
   const m = state.models.find((x) => x.id === selectedModel) || state.models[0];
   return (
     heading("Modelos", button("+ Novo modelo", "add-model", "primary")) +
-    `<div class="stats three">${stat("Modelos no workspace", state.models.length, "Biblioteca local", "⬡", "muted")}${stat("Modelos configurados", state.models.filter((x) => x.status === "ready").length, "Prontos para uma simulação", "✓")}${stat("Treinamento real", "Em breve", "Esta versão demonstra o fluxo", "⌁", "muted")}</div><div class="grid two-cols">${panel("Registro de modelos", `<div class="model-list">${state.models.map((x) => `<button class="model-row ${m?.id === x.id ? "selected" : ""}" data-action="select-model" data-id="${x.id}"><span class="activity-symbol blue">⬡</span><div><strong>${escapeHTML(x.name)}</strong><small>${escapeHTML(x.type)}</small></div>${badge(x.status === "ready" ? "Configurado" : "Rascunho", x.status === "ready" ? "green" : "neutral")}</button>`).join("")}</div>`)}${m ? panel("Detalhes do modelo", `<div class="model-detail-icon">⬡</div><h3>${escapeHTML(m.name)}</h3><p>${escapeHTML(m.type)}</p><dl class="details"><div><dt>Dataset</dt><dd>Exemplo demonstrativo</dd></div><div><dt>Validação</dt><dd>Walk-forward (planejado)</dd></div><div><dt>Última simulação</dt><dd>${m.lastRun ? escapeHTML(new Date(m.lastRun).toLocaleString("pt-BR")) : "Ainda não executada"}</dd></div></dl><div class="small-callout">O fluxo abaixo simula uma execução. Nenhum modelo é treinado e nenhuma previsão é gerada.</div><div class="detail-actions">${button("Editar", "edit-model", "", m.id)}${button("▷ Simular treinamento", "train-model", "primary", m.id)}</div>`) : ""}</div>`
+    `<div class="stats three">${stat("Modelos no workspace", state.models.length, "Biblioteca local", "⬡", "muted")}${stat("Modelos configurados", state.models.filter((x) => x.status === "ready").length, "Prontos para uma simulação", "✓")}${stat("Treinamento real", "Em breve", "Esta versão demonstra o fluxo", "⌁", "muted")}</div><div class="grid two-cols">${panel("Registro de modelos", `<div class="model-list">${state.models.map((x) => `<button class="model-row ${m?.id === x.id ? "selected" : ""}" data-action="select-model" data-id="${x.id}"><span class="activity-symbol blue">⬡</span><div><strong>${escapeHTML(x.name)}</strong><small>${escapeHTML(x.type)}</small></div>${badge(x.status === "ready" ? "Configurado" : "Rascunho", x.status === "ready" ? "green" : "neutral")}</button>`).join("")}</div>`)}${m ? panel("Detalhes do modelo", `<div class="model-detail-icon">⬡</div><h3>${escapeHTML(m.name)}</h3><p>${escapeHTML(m.type)}</p><dl class="details"><div><dt>Dataset</dt><dd>Exemplo demonstrativo</dd></div><div><dt>Validação</dt><dd>Walk-forward (planejado)</dd></div><div><dt>Última simulação</dt><dd>${m.lastRun ? escapeHTML(new Date(m.lastRun).toLocaleString("pt-BR")) : "Ainda não executada"}</dd></div></dl><div class="small-callout">O fluxo abaixo simula uma execução. Nenhum modelo é treinado e nenhuma previsão é gerada.</div>${modelLinks(m)}<div class="detail-actions">${button("Editar", "edit-model", "", m.id)}${button("▷ Simular treinamento", "train-model", "primary", m.id)}</div>`) : ""}</div>`
   );
 }
 function backtests() {
   return (
-    heading("Backtests", button("+ Novo backtest", "add-backtest", "primary")) +
+    heading("Testes", button("+ Novo backtest", "add-backtest", "primary")) +
     panel(
-      "Histórico de experimentos",
-      `<div class="table-wrap"><table><thead><tr><th>Experimento</th><th>Estratégia</th><th>Período</th><th>Capital inicial</th><th>Status</th><th></th></tr></thead><tbody>${state.backtests.map((b) => `<tr><td><strong>${escapeHTML(b.name)}</strong><small>${new Date(b.created).toLocaleDateString("pt-BR")}</small></td><td>${escapeHTML(b.strategy)}</td><td>${escapeHTML(b.start)} → ${escapeHTML(b.end)}</td><td>${money(b.capital)}</td><td>${badge("Demo concluída")}</td><td><button class="text-button" data-action="view-backtest" data-id="${b.id}">Ver detalhes ↗</button></td></tr>`).join("") || '<tr><td colspan="6"><div class="empty-state"><span>⌁</span><h3>Seu primeiro experimento espera por você.</h3><p>Crie um backtest para conhecer o fluxo de pesquisa.</p>' + button("Criar experimento", "add-backtest", "primary") + "</div></td></tr>"}</tbody></table></div>`,
+      "Histórico de testes",
+      testFilterControl() +
+        `<div class="table-wrap"><table><thead><tr><th>Teste</th><th>Estratégia</th><th>Período</th><th>Capital inicial</th><th>Status</th><th></th></tr></thead><tbody>${
+          visibleBacktests()
+            .map(
+              (b) =>
+                `<tr><td><strong>${escapeHTML(b.name)}</strong><small>${new Date(b.created).toLocaleDateString("pt-BR")}</small></td><td>${escapeHTML(b.strategy)}</td><td>${escapeHTML(b.start)} → ${escapeHTML(b.end)}</td><td>${money(b.capital)}</td><td>${badge("Demo concluída")}</td><td><button class="text-button" data-action="view-backtest" data-id="${b.id}">Ver detalhes ↗</button></td></tr>`,
+            )
+            .join("") ||
+          '<tr><td colspan="6"><div class="empty-state"><span>⌁</span><h3>Nenhum teste salvo.</h3><p>Crie um backtest para conhecer o fluxo de pesquisa.</p>' +
+            button("Criar backtest", "add-backtest", "primary") +
+            "</div></td></tr>"
+        }</tbody></table></div>`,
     )
   );
 }
@@ -452,6 +469,11 @@ function settings() {
 }
 const renderers = {
   overview,
+  scripts,
+  positions,
+  performance,
+  income,
+  allocation: allocationPage,
   portfolio,
   markets,
   strategies,
@@ -472,29 +494,43 @@ function applyTheme() {
 }
 function render() {
   applyTheme();
-  $("#navigation").innerHTML = pages
+  const mainPages = [
+    ["overview", "Visão geral", "◈"],
+    ["portfolio", "Carteira", "◴"],
+    ["markets", "Mercados", "▥"],
+    ["laboratory", "Laboratório", "⬡"],
+  ];
+  $("#navigation").innerHTML = mainPages
     .map(
       ([id, label, icon]) =>
-        `<a href="#${id}" class="nav-link ${page === id ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}><span>${icon}</span>${label}${id === "alerts" && state.alerts.some((a) => !a.read) ? '<i class="nav-count">' + state.alerts.filter((a) => !a.read).length + "</i>" : ""}</a>`,
+        `<a href="#${routePath(id)}" class="nav-link ${pageGroup(page) === id ? "active" : ""}" ${pageGroup(page) === id ? 'aria-current="page"' : ""}><span>${icon}</span>${label}${id === "alerts" && state.alerts.some((a) => !a.read) ? '<i class="nav-count">' + state.alerts.filter((a) => !a.read).length + "</i>" : ""}</a>`,
     )
     .join("");
-  $("#breadcrumb").textContent = pages.find((x) => x[0] === page)[1];
+  $("#breadcrumb").textContent =
+    (pageGroup(page) === "laboratory"
+      ? "Laboratório / "
+      : pageGroup(page) === "portfolio" && page !== "portfolio"
+        ? "Carteira / "
+        : "") + pages.find((x) => x[0] === page)[1];
   $("#profile-name").innerHTML =
     `${escapeHTML(state.profile)}<small>Workspace local</small>`;
   $("#notification-dot").hidden = !state.alerts.some((a) => !a.read);
   $("#main").innerHTML = renderers[page]();
   applyPageLayout();
+  renderSectionNavigation();
 }
 function route() {
-  const id = location.hash.slice(1);
+  const id = routeId(location.hash.slice(1));
   page = renderers[id] ? id : "overview";
+  if (location.hash !== "#" + routePath(page))
+    history.replaceState(null, "", "#" + routePath(page));
   if (layoutEditingPage !== page) layoutEditingPage = null;
   render();
   $("#main").scrollTop = 0;
 }
 function go(id) {
   if (page === id) render();
-  else location.hash = id;
+  else location.hash = routePath(id);
 }
 function toast(msg) {
   const el = $("#toast");
@@ -637,10 +673,10 @@ function newBacktest(strategyId) {
     return;
   }
   openModal(
-    "Novo experimento",
+    "Novo backtest",
     form(
       "backtest",
-      field("Nome", "name", "Meu experimento", "text", 'maxlength="60"') +
+      field("Nome", "name", "Meu backtest", "text", 'maxlength="60"') +
         selectField(
           "Estratégia",
           "strategy",
@@ -1036,6 +1072,7 @@ document.addEventListener("submit", async (event) => {
       break;
     case "strategy": {
       const s = {
+        ...state.strategies.find((x) => x.id === id),
         id: id || uid(),
         ...d,
         limit: number("limit"),
@@ -1085,18 +1122,19 @@ document.addEventListener("submit", async (event) => {
           "A data final precisa ser posterior à data inicial.";
         return;
       }
-      await simulate("Executando experimento demo", () => {
+      await simulate("Executando backtest demo", () => {
         state.backtests.unshift({
           id: uid(),
           name: d.name,
           strategy: state.strategies.find((s) => s.id === d.strategy).name,
+          strategyId: d.strategy,
           start: d.start,
           end: d.end,
           capital: number("capital"),
           created: new Date().toISOString(),
         });
         page = "backtests";
-        location.hash = "backtests";
+        location.hash = routePath("backtests");
       });
       return;
   }

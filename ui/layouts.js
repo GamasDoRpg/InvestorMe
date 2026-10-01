@@ -1,6 +1,11 @@
 "use strict";
 // IDs are independent of visible titles and of the selected strategy/model.
 const layoutWidgetIds = {
+  scripts: ["files", "editor"],
+  positions: ["holdings"],
+  performance: ["performance"],
+  income: ["income"],
+  allocation: ["allocation"],
   overview: [
     "total",
     "profit",
