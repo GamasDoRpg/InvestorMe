@@ -17,6 +17,8 @@ let info = {
   notice: null,
 };
 let quotes = await service.getQuotes(demoMarket.map((row) => row.asset));
+let brazilService = null;
+let searchService = service;
 let problems = [],
   refreshing = false;
 export const assets = [];
@@ -66,6 +68,12 @@ export async function initialize(bridge) {
     ]);
     info = selected;
     service = new MarketDataService(remote);
+    if (["brapi", "combined"].includes(info.provider)) {
+      brazilService = new MarketDataService(remote);
+      // A combined search can fail on either market. Its cooldown must not
+      // contaminate the independent quote services.
+      searchService = new MarketDataService(remote);
+    } else searchService = service;
     if (!info.demo) quotes = new Map();
   } catch {
     info = {
@@ -102,15 +110,15 @@ export async function refresh() {
     }
     await Promise.all(
       [...groups].map(async ([exchange, list]) => {
-        try {
-          for (let i = 0; i < list.length; i += 50)
-            for (const [id, quote] of await service.getQuotes(
-              list.slice(i, i + 50),
-            ))
-              quotes.set(id, quote);
-        } catch (error) {
-          const safe = normalizeError(error);
-          problems.push(`${exchange}: ${safe.code} — ${safe.message}`);
+        const batchSize = info.quoteBatchSize === 1 && exchange === "B3" ? 1 : 50;
+        for (let i = 0; i < list.length; i += batchSize) {
+          try {
+            for (const [id, quote] of await (exchange === "B3" && brazilService ? brazilService : service).getQuotes(list.slice(i, i + batchSize))) quotes.set(id, quote);
+          } catch (error) {
+            const safe = normalizeError(error);
+            problems.push(`${exchange} (${list.slice(i, i + batchSize).map(a => a.symbol).join(", ")}): ${safe.code} — ${safe.message}`);
+            if (safe.code === "RATE_LIMIT") break;
+          }
         }
       }),
     );
@@ -119,7 +127,7 @@ export async function refresh() {
   }
 }
 export async function searchAssets(query) {
-  const found = await service.searchAssets(query);
+  const found = await searchService.searchAssets(query);
   found.forEach((asset) => register(asset));
   await refresh();
   return found;
@@ -127,7 +135,7 @@ export async function searchAssets(query) {
 export async function getHistory(ticker, options) {
   const row = assets.find((a) => a.ticker === ticker);
   if (!row) throw new DomainError("Unknown asset");
-  return service.getHistory(row.asset, options);
+  return (row.exchange === "B3" && brazilService ? brazilService : service).getHistory(row.asset, options);
 }
 export function position(record) {
   const asset = assets.find((a) => a.ticker === record.ticker)?.asset;

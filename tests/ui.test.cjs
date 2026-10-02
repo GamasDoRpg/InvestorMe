@@ -575,3 +575,32 @@ test("External UI uses normalized IPC quotes, labels age and retains snapshots o
     await page.waitForSelector('h1');
   }
 });
+
+test("brapi sandbox UI keeps available Brazilian quotes despite token-only asset failures", async () => {
+  const { demoMarket } = await import('../providers/mock-data.mjs');
+  async function install(restore=false) {
+    await app.evaluate(({ipcMain}, {restore, fixtures}) => {
+      ipcMain.removeHandler('market:request');
+      ipcMain.handle('market:request', async (_event,{method,args}) => {
+        if(method==='info') return {ok:true,data:restore
+          ? {provider:'mock',demo:true,label:'Mock Provider · dados demonstrativos',notice:null}
+          : {provider:'brapi',demo:false,quoteBatchSize:1,label:'brapi · ações brasileiras',notice:'B3: atraso aproximado de 30 min. Sem token: PETR4, VALE3, ITUB4 e MGLU3.'}};
+        if(method!=='getQuotes') return {ok:false,error:{code:'UNSUPPORTED'}};
+        if(!restore && args[0].some(a=>!['PETR4','VALE3','ITUB4','MGLU3'].includes(a.symbol))) return {ok:false,error:{code:'AUTH_ERROR'}};
+        return {ok:true,data:args[0].map(a=>restore ? fixtures.find(r=>r.asset.id===a.id).quote
+          : {asset:a,currency:a.currency,price:40,previousClose:32,timestamp:'2026-09-01T15:00:00Z'})};
+      });
+    }, {restore,fixtures:demoMarket});
+  }
+  try {
+    await install(); await page.reload();
+    await page.waitForFunction(()=>window.InvestorMeFinance?.status().provider==='brapi' && !window.InvestorMeFinance.status().refreshing && window.InvestorMeFinance.assets.find(a=>a.ticker==='PETR4').price===40);
+    await navigate('markets');
+    assert.match(await page.locator('.market-status').textContent(),/30 min/);
+    const values=await page.evaluate(()=>Object.fromEntries(window.InvestorMeFinance.assets.map(a=>[a.ticker,a.price])));
+    assert.equal(values.PETR4,40); assert.equal(values.VALE3,40); assert.equal(values.ITUB4,40);
+    assert.equal(values.WEGE3,null); assert.equal(values.AAPL,null);
+    assert.match(await page.locator('.market-status').textContent(),/AUTH_ERROR/);
+    assert.deepEqual(errors,[]);
+  } finally { await install(true); await page.reload(); await page.waitForSelector('h1'); }
+});
