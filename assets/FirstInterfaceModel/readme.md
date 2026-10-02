@@ -1,8 +1,8 @@
-# First Interface Version
+# Historical interface mockups
 
-This folder contains the **first version of the software interface**.
+This folder preserves the **initial interface design references**. These are static mockups, not screenshots or a specification of the current implementation.
 
-The images represent the main screens and the initial user flow planned for the system.
+The images show the screens and user flow envisioned at that time. Any prices, balances, charts, predictions or results in them are illustrative and are not loaded by the current application.
 
 ## Screens
 
@@ -32,4 +32,4 @@ The images represent the main screens and the initial user flow planned for the 
 
 ## Note
 
-This is an initial version of the interface and may change throughout the software development process.
+Current navigation, account connections and feature availability are documented in the [README](../../README.md) and [user guide](../../docs/USER_GUIDE.md). The application now starts with an empty workspace and no fabricated market data.
