@@ -1,5 +1,8 @@
 import { MarketDataError } from "../core/market-data/errors.mjs";
-const endpoints = new Set(["/quote", "/time_series", "/symbol_search"]);
+const configurations = {
+  twelve: { origin: "https://api.twelvedata.com", endpoints: new Set(["/quote", "/time_series", "/symbol_search"]), prefix: "apikey", required: true },
+  brapi: { origin: "https://brapi.dev", endpoints: new Set(["/api/v2/stocks/quote", "/api/v2/stocks/historical", "/api/quote/list"]), prefix: "Bearer", required: false },
+};
 export function providerFailure(status, retryAfterMs = 0) {
   return new MarketDataError(
     status === 429
@@ -12,16 +15,18 @@ export function providerFailure(status, retryAfterMs = 0) {
     { retryAfterMs },
   );
 }
-export class TwelveHttpClient {
+class ProviderHttpClient {
+  #config;
   #key;
   #fetch;
-  constructor({
+  constructor(provider, {
     apiKey,
     fetchImpl = globalThis.fetch,
     timeoutMs = 8000,
     sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     now = Date.now,
   } = {}) {
+    this.#config = configurations[provider];
     this.#key = typeof apiKey === "string" ? apiKey.trim() : "";
     this.#fetch = fetchImpl;
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0)
@@ -31,9 +36,9 @@ export class TwelveHttpClient {
     this.now = now;
   }
   async request(endpoint, params, { signal } = {}) {
-    if (!endpoints.has(endpoint)) throw new MarketDataError("INVALID_REQUEST");
-    if (!this.#key) throw new MarketDataError("AUTH_ERROR");
-    const url = new URL(endpoint, "https://api.twelvedata.com");
+    if (!this.#config.endpoints.has(endpoint)) throw new MarketDataError("INVALID_REQUEST");
+    if (this.#config.required && !this.#key) throw new MarketDataError("AUTH_ERROR");
+    const url = new URL(endpoint, this.#config.origin);
     for (const [key, value] of Object.entries(params))
       url.searchParams.set(key, String(value));
     // The host, endpoint set and credential handling are not renderer configurable.
@@ -49,7 +54,7 @@ export class TwelveHttpClient {
             let response;
             try {
               response = await this.#fetch(url, {
-                headers: { Authorization: `apikey ${this.#key}` },
+                headers: this.#key ? { Authorization: `${this.#config.prefix} ${this.#key}` } : {},
                 redirect: "error",
                 signal: controller.signal,
               });
@@ -66,7 +71,9 @@ export class TwelveHttpClient {
                   : /^\d+$/.test(retry)
                     ? Number(retry) * 1000
                     : Math.max(0, Date.parse(retry) - this.now());
-              throw providerFailure(response.status, delay);
+              throw response.status === 400 && this.#config.prefix === "Bearer"
+                ? new MarketDataError("INVALID_REQUEST")
+                : providerFailure(response.status, delay);
             }
             let data;
             try {
@@ -80,6 +87,7 @@ export class TwelveHttpClient {
             }
             if (!data || typeof data !== "object" || Array.isArray(data))
               throw new MarketDataError("INVALID_RESPONSE");
+            if (data.error === true) throw new MarketDataError("PROVIDER_ERROR");
             if (data.status === "error")
               throw providerFailure(Number(data.code));
             return data;
@@ -117,4 +125,11 @@ export class TwelveHttpClient {
       }
     }
   }
+}
+
+export class TwelveHttpClient extends ProviderHttpClient {
+  constructor(options) { super("twelve", options); }
+}
+export class BrapiHttpClient extends ProviderHttpClient {
+  constructor(options) { super("brapi", options); }
 }

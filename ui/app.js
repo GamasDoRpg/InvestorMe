@@ -468,7 +468,7 @@ function render() {
     const banner = document.createElement("div");
     banner.className = "small-callout market-status";
     banner.setAttribute("role", "status");
-    banner.innerHTML = `<strong>${escapeHTML(info.label)}</strong> ${button(info.refreshing ? "Carregando…" : "Atualizar cotações", "market-refresh")}<p>${escapeHTML(info.notice || (info.demo ? "Preços fictícios; nenhuma conexão externa." : "Timestamp do provedor em cada cotação. B3: fim de dia. Sem garantia de tempo real."))}</p>${info.oldestQuote ? `<p>Cotação mais antiga carregada: ${escapeHTML(new Date(info.oldestQuote).toLocaleString("pt-BR"))}</p>` : ""}${info.problems.map(message => `<p>${escapeHTML(message)} Valores anteriores, quando disponíveis, foram mantidos.</p>`).join("")}`;
+    banner.innerHTML = `<strong>${escapeHTML(info.label)}</strong> ${button(info.refreshing ? "Carregando…" : "Atualizar cotações", "market-refresh")}<p>${escapeHTML(info.notice || (info.demo ? "Preços fictícios; nenhuma conexão externa." : "Timestamp do provedor em cada cotação. Sem garantia de tempo real."))}</p>${info.oldestQuote ? `<p>Cotação mais antiga carregada: ${escapeHTML(new Date(info.oldestQuote).toLocaleString("pt-BR"))}</p>` : ""}${info.problems.map(message => `<p>${escapeHTML(message)} Valores anteriores, quando disponíveis, foram mantidos.</p>`).join("")}`;
     $(".page-heading", $("#main")).after(banner);
   }
   $(".demo-badge").textContent = finance.status().demo ? "Modo demo" : "Dados externos";

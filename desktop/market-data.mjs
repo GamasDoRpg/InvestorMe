@@ -11,6 +11,8 @@ import {
 } from "../core/market-data/contract.mjs";
 import { MockMarketDataProvider } from "../providers/MockMarketDataProvider.mjs";
 import { TwelveDataProvider } from "../providers/TwelveDataProvider.mjs";
+import { BrapiProvider } from "../providers/BrapiProvider.mjs";
+import { RoutedMarketDataProvider } from "../providers/RoutedMarketDataProvider.mjs";
 const baseInfo = {
   provider: "mock",
   demo: true,
@@ -25,7 +27,17 @@ export function createMarketBackend(env = {}, dependencies = {}) {
       ? (event) => console.info("[market-data]", JSON.stringify(event))
       : () => {});
   let provider, info;
-  if (
+  if (["brapi", "combined"].includes(selected)) {
+    const brazil = new MarketDataService(new BrapiProvider({ ...dependencies, apiKey: env.BRAPI_API_KEY }), { logger, ...dependencies.serviceOptions });
+    const hasUS = selected === "combined" && typeof env.TWELVE_DATA_API_KEY === "string" && !!env.TWELVE_DATA_API_KEY.trim();
+    const us = hasUS ? new MarketDataService(new TwelveDataProvider({ ...dependencies, apiKey: env.TWELVE_DATA_API_KEY }), { logger, ...dependencies.serviceOptions }) : null;
+    provider = new RoutedMarketDataProvider({ brazil, us });
+    info = { provider: selected, demo: false, quoteBatchSize: 1,
+      label: hasUS ? "brapi (B3) + Twelve Data (EUA)" : "brapi · ações brasileiras",
+      notice: "B3: atraso aproximado de 30 min no plano gratuito. " +
+        (env.BRAPI_API_KEY?.trim() ? "Token brapi configurado. " : "Sem token: apenas PETR4, VALE3, ITUB4 e MGLU3. ") +
+        (hasUS ? "EUA: conforme plano Twelve Data." : "EUA indisponíveis; use combined com TWELVE_DATA_API_KEY para habilitar.") };
+  } else if (
     selected === "twelve" &&
     typeof env.TWELVE_DATA_API_KEY === "string" &&
     env.TWELVE_DATA_API_KEY.trim()
@@ -55,7 +67,7 @@ export function createMarketBackend(env = {}, dependencies = {}) {
   try {
     logger({ provider: info.provider, status: "selected" });
   } catch {}
-  const service = new MarketDataService(provider, {
+  const service = provider instanceof RoutedMarketDataProvider ? provider : new MarketDataService(provider, {
     logger,
     ...dependencies.serviceOptions,
   });

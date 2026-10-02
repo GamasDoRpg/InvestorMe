@@ -143,6 +143,8 @@ Market data is requested through `MarketDataService`, independently of vendors. 
 | `core/market-data/errors.mjs` | Safe typed errors that do not contain upstream payloads or secrets. |
 | `providers/MockMarketDataProvider.mjs`, `mock-data.mjs` | Eight deterministic demo assets, quotes, search and synthetic weekday daily candles. |
 | `providers/TwelveDataProvider.mjs`, `symbols.mjs`, `http.mjs` | Vendor-specific HTTP, symbol mapping and normalization. |
+| `providers/BrapiProvider.mjs` | B3 quotes/history via v2, search, free-plan serialization and normalization. |
+| `providers/RoutedMarketDataProvider.mjs` | Routes Brazil to brapi and US to Twelve Data with independent services. |
 | `desktop/market-data.mjs` | Main-process provider configuration and validated IPC handler. |
 | `ui/RemoteMarketDataProvider.mjs`, `finance.mjs` | Reconstruct Core objects after IPC and expose a quote snapshot to the existing synchronous renderer. |
 
@@ -161,11 +163,11 @@ const candles = await marketData.getHistory(asset, {
 }); // Candle[], chronological
 ```
 
-**Provider contract.** Quote batches are atomic: missing/invalid entries reject explicitly rather than silently dropping assets. The UI requests separate batches by exchange so a B3 entitlement failure does not discard available US quotes. Batches are bounded to 50 assets. Quote timestamps originate from the provider, never the request completion time. History currently supports **daily bars only**, inclusive ISO session dates, and a maximum span of 366 days. Daily candles encode the exchange session date at `00:00:00Z` for stable date identity; that value is **not an assertion that the exchange opens at midnight UTC**. Intraday timeframes reject with `UNSUPPORTED`. Missing volume, impossible OHLC and duplicate dates reject; no fabricated volume or silently truncated multi-year history. Mock weekdays are synthetic, not an exchange holiday calendar.
+**Provider contract.** Quote batches are atomic: missing/invalid entries reject explicitly rather than silently dropping assets. The UI requests separate batches by exchange so a B3 entitlement failure does not discard available US quotes. Batches are bounded to 50 assets. Quote timestamps originate from the provider, never the request completion time. History currently supports **daily bars only**, inclusive ISO session dates, and a maximum span of 366 days. Twelve/mock daily candles encode the exchange session date at `00:00:00Z` for stable date identity; that value is **not an assertion that the exchange opens at midnight UTC**. Intraday timeframes reject with `UNSUPPORTED`. Missing volume, impossible OHLC and duplicate dates reject; no fabricated volume or silently truncated multi-year history. Mock weekdays are synthetic, not an exchange holiday calendar.
 
 **Symbol mapping.** Only the provider knows that `Asset(symbol='PETR4', exchange='B3')` becomes `PETR4:Bovespa`, while `AAPL` on `NASDAQ` becomes `AAPL:NASDAQ`. Search results map back to IDs such as `B3:PETR4`. The Twelve adapter supports the B3/Bovespa, NASDAQ and NYSE mappings and common/preferred equities, ETFs and indices when their required fields are available. Other exchanges/types are excluded from search. No `.SA` suffix or API-specific identifier enters the Core/UI. The existing workspace uses one position/watchlist entry per ticker, so the UI retains the first exchange for cross-listed tickers; the Core/service still use exchange-qualified IDs. Discovered asset metadata is saved in an optional `marketAssets` field (maximum 100 catalog entries); prices, secrets and historical series are never persisted. Existing version-1 workspaces need no migration.
 
-**Why Twelve Data.** It documents quote batching, search and OHLCV for US equities and B3, allowing one adapter instead of scraping. It is optional and requires a user-supplied key with suitable entitlements. Its B3 listing specifies **EOD (end of day), Grow+/Venture+**; this project does not claim free B3 coverage. US feed coverage and access depend on the subscription. No exact 15-minute delay or real-time guarantee is invented. The UI labels the source, shows quote timestamps, marks quotes older than 60 seconds, and displays the oldest loaded timestamp. That age marker is not a market-open detector or a guarantee of freshness for newer quotes.
+**Why Twelve Data.** It documents quote batching, search and OHLCV for US equities and B3, allowing one adapter instead of scraping. It is optional and requires a user-supplied key with suitable entitlements. Its B3 listing specifies **EOD (end of day), Grow+/Venture+**; the Twelve adapter does not provide free B3 coverage. The separate brapi adapter below offers a free option. US feed coverage and access depend on the subscription. No exact 15-minute delay or real-time guarantee is invented. The UI labels the source, shows quote timestamps, marks quotes older than 60 seconds, and displays the oldest loaded timestamp. That age marker is not a market-open detector or a guarantee of freshness for newer quotes.
 
 Official documentation reviewed for this implementation:
 
@@ -196,7 +198,30 @@ $env:MARKET_DATA_DEBUG = "1" # optional safe development logs
 npm start
 ```
 
-On bash/zsh, set the same names with `export` before `npm start`. `.env.example` documents the names; `.env` files are ignored by Git and **are not automatically loaded**. Set variables in the launching process. A missing key or unknown provider selects mock with an explicit visible notice. An invalid key, insufficient plan, offline network or runtime provider failure does **not** silently switch an active external session to mock. Existing quote snapshots stay visible with their original timestamps and a failure notice; unavailable values display `—`. Restart after changing provider configuration. Browser `npm run preview` is intentionally mock-only and never receives credentials.
+On bash/zsh, set the same names with `export` before `npm start`. `.env.example` documents the names; `.env` files are ignored by Git and **are not automatically loaded**. Set variables in the launching process. In `twelve` mode, a missing key selects mock; an unknown provider also selects mock with an explicit visible notice. An invalid key, insufficient plan, offline network or runtime provider failure does **not** silently switch an active external session to mock. Existing quote snapshots stay visible with their original timestamps and a failure notice; unavailable values display `—`. Restart after changing provider configuration. Browser `npm run preview` is intentionally mock-only and never receives credentials.
+
+### Free Brazilian data with brapi
+
+Use `MARKET_DATA_PROVIDER=brapi` for Brazilian stocks only, or `combined` to route B3 to brapi and NASDAQ/NYSE to Twelve Data. Mock remains the default; external modes never substitute fictitious prices for unavailable assets.
+
+```powershell
+$env:MARKET_DATA_PROVIDER = "combined"
+$env:BRAPI_API_KEY = "YOUR_FREE_BRAPI_TOKEN"
+$env:TWELVE_DATA_API_KEY = "YOUR_FREE_TWELVE_KEY"
+npm start
+```
+
+For a keyless B3 trial, set `MARKET_DATA_PROVIDER=brapi` and leave `BRAPI_API_KEY` unset. Only **PETR4, VALE3, ITUB4 and MGLU3** are eligible without a token. Existing unsupported holdings remain saved; their quotes show unavailable, not demo values. With a free brapi account/token, other supported Brazilian stocks can be queried. Missing US credentials disable US queries explicitly without preventing B3 access. Search without a brapi token can discover assets that require a token for quotes.
+
+The documented free brapi plan allows **15,000 requests per monthly cycle, one ticker per request and one concurrent request**, approximately **30-minute quote delay**, and up to **3 months of history**. Keyless sandbox requests have a separate 20/minute/IP limit. This adapter deliberately sends one ticker per call even on paid accounts and serializes all brapi HTTP calls. It uses the same 60-second quote/5-minute history/search caches, with no automatic polling. UI B3 refreshes handle assets individually so WEGE3/BBDC4 authentication failures do not discard available PETR4/VALE3/ITUB4 prices. Each market has an independent service/cache/cooldown; a B3 429 does not block US quotes. Search across both configured providers is atomic and reports a provider failure explicitly.
+
+Only the adapter knows brapi symbols (`PETR4`); Core identities remain `B3:PETR4`. Search currently supports equities/units and ETFs; FIIs, BDRs, indices and other asset types are excluded. Quote timestamps come from `regularMarketTime`; the request timestamp is never used as quote freshness. Changed/renamed symbols are rejected instead of silently changing portfolio identity. Daily candles retain the provider's Unix timestamp and reported OHLCV; null fields and impossible bars are rejected. The provider may supply adjusted OHLC prices; this adapter does not claim a raw/unadjusted or uniform adjustment policy. History outside the account allowance returns an explicit error (HTTP 400 → `INVALID_REQUEST`, 403 → `AUTH_ERROR`), never silently truncates.
+
+Tokens stay in main-process environment variables and Authorization headers. `.env` is not auto-loaded. The Windows build already includes all provider modules. No account signup or paid subscription is performed by the app.
+
+Official references: [authentication](https://brapi.dev/docs/authentication), [API schemas](https://brapi.dev/openapi.json), [daily history](https://brapi.dev/docs/acoes/historico), [free access](https://brapi.dev/faq/api-e-gratis-mesmo), [limits](https://brapi.dev/faq/quais-as-limitacoes), [terms](https://brapi.dev/termos-de-uso). Data access remains subject to the provider's terms and plan; this integration does not grant redistribution rights.
+
+Validation uses HTTP fixtures for brapi and Electron tests for keyless partial availability. A keyless PETR4 smoke request was attempted; this environment returned `NO_NETWORK`. Live availability and account entitlements have not been confirmed here.
 
 ### Cache, errors and security
 
@@ -204,7 +229,7 @@ On bash/zsh, set the same names with `export` before `npm start`. `.env.example`
 - HTTP timeout: **8 seconds per attempt**, including the body. At most one retry, after 300 ms, for network/server failures. No automatic retry for timeout, auth, invalid symbols or 429. Service calls have an **18-second deadline** and cancellation signal even if a provider stalls. A 429 triggers at least 60 seconds of service cooldown, respecting longer `Retry-After` values up to 24 hours.
 - Errors: `NO_NETWORK`, `RATE_LIMIT`, `INVALID_SYMBOL`, `AUTH_ERROR`, `PROVIDER_ERROR`, `TIMEOUT`, plus `INVALID_REQUEST`, `INVALID_RESPONSE` and `UNSUPPORTED`. Upstream messages are never forwarded to the renderer or logs.
 - `MARKET_DATA_DEBUG=1` logs selected provider, operation, normalized status and duration in the main process. It logs no key, headers, full URLs, response payloads or raw exceptions. No analytics service is used.
-- The only external host is `https://api.twelvedata.com`; only `/quote`, `/time_series` and `/symbol_search` are allowed. Keys use the Authorization header; redirects are rejected. No renderer-selected URL or credential parameter exists.
+- Allowed external hosts/endpoints are fixed: `https://api.twelvedata.com` (`/quote`, `/time_series`, `/symbol_search`) and `https://brapi.dev` (`/api/v2/stocks/quote`, `/api/v2/stocks/historical`, `/api/quote/list`). Keys use the Authorization header; redirects are rejected. No renderer-selected URL or credential parameter exists.
 - Preload exposes only `desktop.market.info/getQuote/getQuotes/getHistory/searchAssets`. The main handler validates sender window, top frame, local app URL, method, argument counts, asset fields, query length, history ranges and batch sizes, and bounds concurrent IPC calls. `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true` and `connect-src 'none'` remain unchanged. Browser preview does not serve the real provider, HTTP module, desktop backend or environment files.
 
 ### UI and verification

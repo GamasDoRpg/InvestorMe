@@ -67,6 +67,7 @@ app.whenReady().then(async () => {
   const backend = createMarketBackend({
     MARKET_DATA_PROVIDER: process.env.MARKET_DATA_PROVIDER,
     TWELVE_DATA_API_KEY: process.env.TWELVE_DATA_API_KEY,
+    BRAPI_API_KEY: process.env.BRAPI_API_KEY,
     MARKET_DATA_DEBUG: process.env.MARKET_DATA_DEBUG,
   });
   ipcMain.handle("market:request", createMarketHandler(backend, trusted));
