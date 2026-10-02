@@ -34,24 +34,26 @@ InvestorMe opens as a desktop window with minimize, maximize/restore, and close 
 ### What works in this preview
 
 - Four main areas: Overview, Portfolio, Markets, and Laboratory. Portfolio and Laboratory use internal sections; alerts are opened from the bell and settings from the profile gear.
-- Add, edit, and delete Brazilian equity positions; edit cash; calculate totals using the selected market-data provider (mock by default).
-- Filter example assets, inspect details, manage a watchlist, and search pages/assets with `Ctrl+K`.
+- Add, edit, and delete Brazilian equity positions; edit cash; calculate totals using the selected market-data provider (unavailable until a provider is configured).
+- Filter the asset metadata catalog, inspect details, manage a watchlist, and search pages/assets with `Ctrl+K`.
 - Create/edit/delete strategies, change their local active/paused state, and configure position limits.
-- Create/edit/delete model configurations and simulate the training flow.
-- Configure backtest dates, validate date ranges, simulate the execution flow, and inspect experiment history.
+- Create/edit/delete model configurations; training is not implemented.
+- Save backtest configurations and validate date ranges; execution is not implemented.
 - Configure risk limits and calculate a simplified uniform-price-drop scenario.
 - Create/edit/delete alert rules, toggle them, filter unread rules, and mark all as read.
 - Save a local display name, notification preferences, theme, and density.
-- Persist the workspace locally, export it to JSON through a native save dialog, and restore the initial demo after confirmation.
+- Persist the workspace locally, export it to JSON through a native save dialog, and clear the workspace after confirmation.
 
-Prices and market changes use **demonstrative data by default**. The optional Twelve Data provider can supply external quotes and daily OHLCV; access and freshness depend on the account and exchange. Charts remain illustrations, not financial outputs. Model training, backtesting, alert monitoring, brokerage connections, authentication, and live trading are **not implemented**. The active strategy switch only changes its saved local state. Exported JSON is a snapshot; importing is not implemented yet.
+The app starts with an empty workspace and **no fabricated prices, returns, histories or research results**. Market values remain `—` until a provider supplies a valid quote. Reference tickers/names identify real assets but imply no received data. Model training, backtesting, alert monitoring, brokerage connections, authentication and live trading are **not implemented**. Strategies and scripts store local configuration only. Exported JSON is a snapshot; importing is not implemented yet.
+
+The screenshots above show the earlier interface and may contain historical example data; new installations do not load it.
 
 ### Navigation and research workspace
 
 | Main area | Frontend sections and purpose |
 | --- | --- |
 | Overview | Summary of portfolio, positions and research activity. |
-| Portfolio | Summary, Positions, Performance, Income, Allocation and Risk. Existing demo positions and risk controls remain available. Income currently shows an explicit empty state; no income engine is implemented. |
+| Portfolio | Summary, Positions, Performance, Income, Allocation and Risk. User-entered positions and risk controls are available. Income currently shows an explicit empty state; no income engine is implemented. |
 | Markets | Asset filtering/provider search, quotes with timestamps, watchlist and daily history. |
 | Laboratory | Strategies, Models, Scripts and Tests in one workspace. |
 
@@ -89,9 +91,9 @@ Source layout:
 
 ```text
 desktop/       Electron main process, restricted preload bridge, preview server, app icon
-ui/            Local HTML, CSS, JavaScript interface and demo workspace
+ui/            Local HTML, CSS, JavaScript interface and workspace persistence
 core/          Independent financial domain and market-data service (native ES modules)
-providers/     Deterministic mock and optional Twelve Data HTTP adapter
+providers/     Twelve Data/brapi HTTP adapters and explicit unavailable provider
 tests/         Core unit tests and Electron/browser interaction tests
 scripts/       Cross-platform syntax validation
 .github/       Test and Windows packaging workflow
@@ -110,7 +112,7 @@ Implemented: independent `Asset`, `Quote`, `Candle`, `Position` and `Portfolio` 
 | `core/market/` | Immutable asset identity and market metadata; timestamped quotes with derived changes; validated provider-independent OHLCV candles. |
 | `core/portfolio/` | Immutable positions and portfolios; invested capital, market value, cash, equity, unrealized P/L and allocation. |
 | `core/common/` | Domain errors, input validation and shared decimal arithmetic. |
-| `ui/demo-market.mjs` | Compatibility re-export of `providers/mock-data.mjs`; fixtures now belong to the mock provider. |
+| `core/market/catalog.mjs` | Reference asset metadata only; no prices or generated market data. |
 | `ui/finance.mjs` | Converts legacy workspace records into domain objects and exposes a presentation facade for the current UI. |
 | `ui/app.js` | Rendering, interactions, formatting and localStorage persistence. Basic portfolio calculations delegate to the core. |
 | `desktop/` | Electron lifecycle, restricted native bridge and browser preview; no financial rules. |
@@ -121,11 +123,13 @@ Implemented: independent `Asset`, `Quote`, `Candle`, `Position` and `Portfolio` 
 
 `Portfolio.evaluate(quotes)` accepts a `Map` keyed by asset ID. It returns invested capital, market value, total equity (positions plus cash), unrealized P/L and per-position results. Allocation is a percentage of total equity **including cash**; `investedAllocation` is the percentage of position market value **excluding cash**, preserving the existing risk-page convention. Empty portfolios return zero values and zero allocations. Unknown quotes produce `null` valuation-dependent results rather than pretending the asset is worth zero; zero-quantity positions are worth zero without a quote. Returns on a zero cost basis and changes against a zero previous close are `null` because the percentage is undefined.
 
-**Currencies and precision.** Core models support currencies independently of market/country. Each portfolio currently accepts only positions in its base currency; mixing currencies throws an explicit conversion-required error. No FX rates are assumed. The UI retains its existing BRL-only portfolio and USD market examples. Addition, subtraction and multiplication use decimal representations with integer arithmetic internally, avoiding common artifacts such as `0.1 + 0.2` without rounding intermediate values to cents. Inputs/outputs remain JavaScript Numbers and percentages use floating-point division; this is not an arbitrary-precision accounting ledger. Overflow/underflow in the decimal operations is rejected. Only presentation formats values to two decimal places.
+**Currencies and precision.** Core models support currencies independently of market/country. Each portfolio currently accepts only positions in its base currency; mixing currencies throws an explicit conversion-required error. No FX rates are assumed. The UI retains its existing BRL-only portfolio and USD market assets. Addition, subtraction and multiplication use decimal representations with integer arithmetic internally, avoiding common artifacts such as `0.1 + 0.2` without rounding intermediate values to cents. Inputs/outputs remain JavaScript Numbers and percentages use floating-point division; this is not an arbitrary-precision accounting ledger. Overflow/underflow in the decimal operations is rejected. Only presentation formats values to two decimal places.
 
-**Workspace compatibility.** No migration or reset is needed. The key `investorme.workspace.v1`, version `1`, `cash` and position records `{ id, ticker, quantity, cost }` remain unchanged, as do scripts, strategies, models, alerts, settings, layouts and JSON export. Domain objects are reconstructed in memory. Financial form submissions validate before saving. Invalid saved financial values surface an error with edit/delete/cash/export actions; they are not silently repaired, discarded or replaced by demo positions.
+**Workspace compatibility.** A compatible migration removes legacy examples as described below. The key `investorme.workspace.v1`, version `1`, `cash` and position records `{ id, ticker, quantity, cost }` remain unchanged, as do scripts, strategies, models, alerts, settings, layouts and JSON export. Domain objects are reconstructed in memory. Financial form submissions validate before saving. Invalid saved financial values surface an error with edit/delete/cash/export actions; they are not silently repaired, discarded or replaced by demo positions.
 
-**Still demonstrative.** The default mock prices and previous closes are fictitious. Stage 2 below adds an optional external provider. Charts remain illustrations; the stress scenario is simple arithmetic, not a risk engine. Model training, backtests and alert monitoring remain simulated; scripts remain inert text. Indicators, historical persistence, real backtesting, machine learning and trading are not implemented.
+**No demonstration outputs.** Mock providers and synthetic data are restricted to automated test fixtures, excluded from desktop packaging. Portfolio performance charts show unavailable history rather than invented lines. The stress scenario is arithmetic applied to user-selected assumptions and actual available valuations, not a prediction. Indicators, historical persistence, real backtesting, model training, alert monitoring and trading are not implemented.
+
+**Legacy data migration.** `ui/workspace.mjs` starts new workspaces empty. On first loading an older workspace, exact unchanged seed records and the old default cash/watchlist are removed. Custom or edited records, scripts, layouts and preferences are preserved. Simulated model-run/backtest outputs are removed while their user configuration remains as drafts. Before migration, a local recovery copy is saved once under `investorme.workspace.v1.before-real-data`; it is never displayed as current data. Because old records lacked provenance, an unchanged seed value cannot be distinguished from a user independently choosing that identical value; the recovery copy preserves the original workspace. The current workspace keeps version 1 and adds `dataRevision: 2`. No automatic workspace reset occurs.
 
 `npm run check` validates all JavaScript source and test files. `npm test` runs the core calculations/validation tests plus all existing Electron tests and new compatibility, invalid-data recovery and browser-preview checks.
 
@@ -141,7 +145,7 @@ Market data is requested through `MarketDataService`, independently of vendors. 
 | `core/market-data/MarketDataService.mjs` | Provider-independent calls, batching cache misses, in-flight deduplication, deadlines, validation and rate-limit cooldown. |
 | `core/market-data/MemoryCache.mjs` | Bounded in-memory TTL cache with an injectable clock. |
 | `core/market-data/errors.mjs` | Safe typed errors that do not contain upstream payloads or secrets. |
-| `providers/MockMarketDataProvider.mjs`, `mock-data.mjs` | Eight deterministic demo assets, quotes, search and synthetic weekday daily candles. |
+| `providers/UnavailableMarketDataProvider.mjs` | Explicit unavailable state without fallback prices. Test-only fixtures live under `tests/fixtures/` and are not packaged. |
 | `providers/TwelveDataProvider.mjs`, `symbols.mjs`, `http.mjs` | Vendor-specific HTTP, symbol mapping and normalization. |
 | `providers/BrapiProvider.mjs` | B3 quotes/history via v2, search, free-plan serialization and normalization. |
 | `providers/RoutedMarketDataProvider.mjs` | Routes Brazil to brapi and US to Twelve Data with independent services. |
@@ -152,10 +156,10 @@ All four methods are asynchronous:
 
 ```js
 import { MarketDataService } from './core/market-data/MarketDataService.mjs';
-import { MockMarketDataProvider } from './providers/MockMarketDataProvider.mjs';
+import { TwelveDataProvider } from './providers/TwelveDataProvider.mjs';
 
-const marketData = new MarketDataService(new MockMarketDataProvider());
-const [asset] = await marketData.searchAssets('PETR4'); // Asset[]
+const marketData = new MarketDataService(new TwelveDataProvider({ apiKey: process.env.TWELVE_DATA_API_KEY }));
+const [asset] = await marketData.searchAssets('AAPL'); // Asset[] — run in a trusted Node process
 const quote = await marketData.getQuote(asset); // Quote
 const quotes = await marketData.getQuotes([asset]); // Map<asset.id, Quote>
 const candles = await marketData.getHistory(asset, {
@@ -163,7 +167,7 @@ const candles = await marketData.getHistory(asset, {
 }); // Candle[], chronological
 ```
 
-**Provider contract.** Quote batches are atomic: missing/invalid entries reject explicitly rather than silently dropping assets. The UI requests separate batches by exchange so a B3 entitlement failure does not discard available US quotes. Batches are bounded to 50 assets. Quote timestamps originate from the provider, never the request completion time. History currently supports **daily bars only**, inclusive ISO session dates, and a maximum span of 366 days. Twelve/mock daily candles encode the exchange session date at `00:00:00Z` for stable date identity; that value is **not an assertion that the exchange opens at midnight UTC**. Intraday timeframes reject with `UNSUPPORTED`. Missing volume, impossible OHLC and duplicate dates reject; no fabricated volume or silently truncated multi-year history. Mock weekdays are synthetic, not an exchange holiday calendar.
+**Provider contract.** Quote batches are atomic: missing/invalid entries reject explicitly rather than silently dropping assets. The UI requests separate batches by exchange so a B3 entitlement failure does not discard available US quotes. Batches are bounded to 50 assets. Quote timestamps originate from the provider, never the request completion time. History currently supports **daily bars only**, inclusive ISO session dates, and a maximum span of 366 days. Twelve daily candles encode the exchange session date at `00:00:00Z` for stable date identity; that value is **not an assertion that the exchange opens at midnight UTC**. Intraday timeframes reject with `UNSUPPORTED`. Missing volume, impossible OHLC and duplicate dates reject; no fabricated volume or silently truncated multi-year history.
 
 **Symbol mapping.** Only the provider knows that `Asset(symbol='PETR4', exchange='B3')` becomes `PETR4:Bovespa`, while `AAPL` on `NASDAQ` becomes `AAPL:NASDAQ`. Search results map back to IDs such as `B3:PETR4`. The Twelve adapter supports the B3/Bovespa, NASDAQ and NYSE mappings and common/preferred equities, ETFs and indices when their required fields are available. Other exchanges/types are excluded from search. No `.SA` suffix or API-specific identifier enters the Core/UI. The existing workspace uses one position/watchlist entry per ticker, so the UI retains the first exchange for cross-listed tickers; the Core/service still use exchange-qualified IDs. Discovered asset metadata is saved in an optional `marketAssets` field (maximum 100 catalog entries); prices, secrets and historical series are never persisted. Existing version-1 workspaces need no migration.
 
@@ -182,27 +186,23 @@ The Basic plan documentation lists 800 daily credits; minute budgets depend on t
 
 ### Configuration
 
-The default is offline mock, requiring no account or API key:
+Use the desktop app; no terminal configuration is required:
 
-```powershell
-$env:MARKET_DATA_PROVIDER = "mock"
-npm start
-```
+1. Open the profile gear → **Conta e configurações** → **Conexões de mercado**.
+2. Select **Brasil: brapi · EUA: Twelve Data** (or one provider).
+3. Paste your personal brapi and Twelve Data API keys and click **Salvar e conectar**.
+4. Use **Testar conexão salva** for each provider to check authentication and a quote (PETR4/AAPL). A saved key alone does not confirm access.
+5. Open Markets and use **Atualizar cotações** as needed. Access, timestamps and quotas depend on your accounts.
 
-Optional external data in Electron:
+Saving changes providers immediately and clears previous connection caches; no restart is needed. Blank key fields preserve saved keys. **Remover chave** clears one credential; **Desconectar** stops queries and clears displayed quotes while retaining credentials for later use. A failed refresh removes affected prices; totals depending on those prices become unavailable. No mock fallback exists, even for missing keys or an unsupported provider setting.
 
-```powershell
-$env:MARKET_DATA_PROVIDER = "twelve"
-$env:TWELVE_DATA_API_KEY = "YOUR_PERSONAL_KEY"
-$env:MARKET_DATA_DEBUG = "1" # optional safe development logs
-npm start
-```
+`desktop/connections.mjs` stores credentials outside the workspace, encrypted through Electron `safeStorage` in the OS user-data directory. Status IPC returns only whether a key exists; saved secrets are never returned to the renderer, placed in localStorage, or included in JSON exports. Password inputs are cleared on submission. On Linux, the insecure `basic_text` backend is refused: without OS encryption, keys are session-only and the UI explains that they must be entered again after restarting. Corrupt/locked credential files are left intact until an explicit save replaces them.
 
-On bash/zsh, set the same names with `export` before `npm start`. `.env.example` documents the names; `.env` files are ignored by Git and **are not automatically loaded**. Set variables in the launching process. In `twelve` mode, a missing key selects mock; an unknown provider also selects mock with an explicit visible notice. An invalid key, insufficient plan, offline network or runtime provider failure does **not** silently switch an active external session to mock. Existing quote snapshots stay visible with their original timestamps and a failure notice; unavailable values display `—`. Restart after changing provider configuration. Browser `npm run preview` is intentionally mock-only and never receives credentials.
+Optional environment variables (`MARKET_DATA_PROVIDER=disabled|brapi|twelve|combined`, `BRAPI_API_KEY`, `TWELVE_DATA_API_KEY`, `MARKET_DATA_DEBUG`) configure a first launch when no saved connection file exists. Saved account settings take precedence. `.env.example` documents them; `.env` files are ignored and not automatically loaded. Browser `npm run preview` remains disconnected and cannot configure or query providers.
 
 ### Free Brazilian data with brapi
 
-Use `MARKET_DATA_PROVIDER=brapi` for Brazilian stocks only, or `combined` to route B3 to brapi and NASDAQ/NYSE to Twelve Data. Mock remains the default; external modes never substitute fictitious prices for unavailable assets.
+Use `MARKET_DATA_PROVIDER=brapi` for Brazilian stocks only, or `combined` to route B3 to brapi and NASDAQ/NYSE to Twelve Data. The default is disconnected; no mode substitutes fictitious prices for unavailable assets.
 
 ```powershell
 $env:MARKET_DATA_PROVIDER = "combined"
@@ -217,7 +217,7 @@ The documented free brapi plan allows **15,000 requests per monthly cycle, one t
 
 Only the adapter knows brapi symbols (`PETR4`); Core identities remain `B3:PETR4`. Search currently supports equities/units and ETFs; FIIs, BDRs, indices and other asset types are excluded. Quote timestamps come from `regularMarketTime`; the request timestamp is never used as quote freshness. Changed/renamed symbols are rejected instead of silently changing portfolio identity. Daily candles retain the provider's Unix timestamp and reported OHLCV; null fields and impossible bars are rejected. The provider may supply adjusted OHLC prices; this adapter does not claim a raw/unadjusted or uniform adjustment policy. History outside the account allowance returns an explicit error (HTTP 400 → `INVALID_REQUEST`, 403 → `AUTH_ERROR`), never silently truncates.
 
-Tokens stay in main-process environment variables and Authorization headers. `.env` is not auto-loaded. The Windows build already includes all provider modules. No account signup or paid subscription is performed by the app.
+Saved tokens are decrypted only in the main process and sent in Authorization headers. `.env` is not auto-loaded. The Windows build already includes all provider modules. No account signup or paid subscription is performed by the app.
 
 Official references: [authentication](https://brapi.dev/docs/authentication), [API schemas](https://brapi.dev/openapi.json), [daily history](https://brapi.dev/docs/acoes/historico), [free access](https://brapi.dev/faq/api-e-gratis-mesmo), [limits](https://brapi.dev/faq/quais-as-limitacoes), [terms](https://brapi.dev/termos-de-uso). Data access remains subject to the provider's terms and plan; this integration does not grant redistribution rights.
 
@@ -229,12 +229,12 @@ Validation uses HTTP fixtures for brapi and Electron tests for keyless partial a
 - HTTP timeout: **8 seconds per attempt**, including the body. At most one retry, after 300 ms, for network/server failures. No automatic retry for timeout, auth, invalid symbols or 429. Service calls have an **18-second deadline** and cancellation signal even if a provider stalls. A 429 triggers at least 60 seconds of service cooldown, respecting longer `Retry-After` values up to 24 hours.
 - Errors: `NO_NETWORK`, `RATE_LIMIT`, `INVALID_SYMBOL`, `AUTH_ERROR`, `PROVIDER_ERROR`, `TIMEOUT`, plus `INVALID_REQUEST`, `INVALID_RESPONSE` and `UNSUPPORTED`. Upstream messages are never forwarded to the renderer or logs.
 - `MARKET_DATA_DEBUG=1` logs selected provider, operation, normalized status and duration in the main process. It logs no key, headers, full URLs, response payloads or raw exceptions. No analytics service is used.
-- Allowed external hosts/endpoints are fixed: `https://api.twelvedata.com` (`/quote`, `/time_series`, `/symbol_search`) and `https://brapi.dev` (`/api/v2/stocks/quote`, `/api/v2/stocks/historical`, `/api/quote/list`). Keys use the Authorization header; redirects are rejected. No renderer-selected URL or credential parameter exists.
-- Preload exposes only `desktop.market.info/getQuote/getQuotes/getHistory/searchAssets`. The main handler validates sender window, top frame, local app URL, method, argument counts, asset fields, query length, history ranges and batch sizes, and bounds concurrent IPC calls. `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true` and `connect-src 'none'` remain unchanged. Browser preview does not serve the real provider, HTTP module, desktop backend or environment files.
+- Allowed external hosts/endpoints are fixed: `https://api.twelvedata.com` (`/quote`, `/time_series`, `/symbol_search`) and `https://brapi.dev` (`/api/v2/stocks/quote`, `/api/v2/stocks/historical`, `/api/quote/list`). Keys use the Authorization header; redirects are rejected. No renderer-selected URL exists; credential updates use a separate restricted IPC endpoint.
+- Preload exposes `desktop.market.info/getQuote/getQuotes/getHistory/searchAssets` and `desktop.connections.status/save/test`. The main handler validates sender window, top frame, local app URL, method, argument counts, asset fields, query length, history ranges and batch sizes, and bounds concurrent IPC calls. `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true` and `connect-src 'none'` remain unchanged. Browser preview does not serve the real provider, HTTP module, desktop backend or environment files.
 
 ### UI and verification
 
-Markets uses the service's quote snapshot. Typing filters the loaded catalog locally; **Consultar provedor** performs provider search and saves discovered metadata. **Atualizar cotações** refreshes quotes subject to cache/limits. Asset details expose **Histórico diário** for the last 30 days. Portfolio valuation uses the same quote snapshot and the existing Core. BRL-only portfolio accounting is unchanged; no FX conversion was added. Charts, backtests, models, alerts and script execution remain illustrative or simulated as before.
+Markets uses the service's quote snapshot. Typing filters the loaded catalog locally; **Consultar provedor** performs provider search and saves discovered metadata. **Atualizar cotações** refreshes quotes subject to cache/limits. Asset details expose **Histórico diário** for the last 30 days. Portfolio valuation uses the same quote snapshot and the existing Core. BRL-only portfolio accounting is unchanged; no FX conversion was added. Unavailable charts show an empty state. Backtests and models store configurations only; alert monitoring and script execution remain unimplemented.
 
 `npm run check` covers the new modules. `npm test` exercises the contract, deterministic mock, symbol mapping, batch calls, cache expiration/coalescing, errors/timeouts/retries, configuration, IPC validation, secret-safe logs and the UI. Real-provider tests use injected HTTP fixtures; they make no internet calls and need no key. No authenticated live-provider smoke test was performed during implementation, so account entitlements and live response availability remain unverified. Windows packaging includes the new modules; a Windows binary was not built locally.
 
