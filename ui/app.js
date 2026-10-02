@@ -127,8 +127,17 @@ async function refreshMarket() {
   render();
 }
 function assetCell(a) {
-  return `<div class="asset-cell"><span class="asset-logo ${a.color}">${a.ticker.slice(0, 2)}</span><div><strong>${a.ticker}</strong><small>${escapeHTML(a.name)}</small></div></div>`;
+  const logo = finance.assetLogo(a);
+  return `<div class="asset-cell"><span class="asset-logo" title="${escapeHTML(logo ? a.name : "Logo indisponível")}" aria-hidden="true"><span>${escapeHTML(a.ticker)}</span>${logo ? `<img src="${escapeHTML(logo)}" alt="" width="30" height="30" decoding="async">` : ""}</span><div><strong>${escapeHTML(a.ticker)}</strong><small>${escapeHTML(a.name)}</small></div></div>`;
 }
+// Keep a readable ticker if a bundled image is missing or fails to decode.
+// Capture is necessary because image error events do not bubble.
+document.addEventListener("error", event => {
+  if (event.target instanceof HTMLImageElement && event.target.matches(".asset-logo img")) {
+    event.target.parentElement.title = "Logo indisponível";
+    event.target.remove();
+  }
+}, true);
 function holdingsTable(full = false) {
   const valuation = totals();
   return `<div class="table-wrap"><table><thead><tr><th>Ativo</th><th>Quantidade</th><th>Preço médio</th><th>Preço</th><th>Resultado</th>${full ? "<th>Ações</th>" : ""}</tr></thead><tbody>${

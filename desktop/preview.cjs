@@ -41,6 +41,7 @@ http
           ".css": "text/css",
           ".js": "text/javascript",
           ".mjs": "text/javascript",
+          ".svg": "image/svg+xml",
         }[path.extname(file)] || "application/octet-stream",
       );
       res.end(data);

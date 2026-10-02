@@ -1,3 +1,4 @@
+export { assetLogo } from "./asset-logos.mjs";
 import { Asset, Position, Portfolio, DomainError } from "../core/index.mjs";
 import { validateAsset } from "../core/market-data/contract.mjs";
 import { MarketDataService } from "../core/market-data/MarketDataService.mjs";

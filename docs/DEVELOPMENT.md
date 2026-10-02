@@ -39,7 +39,7 @@ The preview is a long-running process; stop it before ending the session. It int
 
 ## Tests and evidence
 
-The last application-code validation on 2026-10-02 passed `npm run check` and **61 tests**. Tests use temporary user profiles and controlled provider responses; they do not require API keys or internet access to financial services.
+The last application-code validation on 2026-10-02 passed `npm run check` and **62 tests**. Tests use temporary user profiles and controlled provider responses; they do not require API keys or internet access to financial services.
 
 | Test file | Main coverage |
 | --- | --- |
@@ -47,7 +47,7 @@ The last application-code validation on 2026-10-02 passed `npm run check` and **
 | `tests/market-data.test.mjs` | Contract, normalization, cache/coalescing, deadlines/retries, errors, Twelve HTTP fixtures, configuration and IPC. |
 | `tests/brapi.test.mjs` | brapi normalization/history/search, token headers, serialized requests, errors and independent routing/cooldowns. |
 | `tests/connections.test.mjs` | Credential persistence/removal, unavailable encryption, malformed input, corrupt-file preservation, trusted requests, stale replies and workspace migration. |
-| `tests/ui.test.cjs` | Actual Electron UI, CRUD, research configuration, scripts, layouts, preferences/export, empty state, preview and account/provider flow. |
+| `tests/ui.test.cjs` | Actual Electron UI, CRUD, research configuration, scripts, layouts, preferences/export, empty state, preview, local company logos/fallback and account/provider flow. |
 
 The encryption unit tests inject a cryptographic test implementation; they do not prove every operating system's keychain behavior. Electron tests exercise production IPC/account/provider wiring with injected HTTP responses. An authenticated live-provider smoke test and a restart on a target Windows installation are separate checks; do not report them as completed because fixtures pass.
 
