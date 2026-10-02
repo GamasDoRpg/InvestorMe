@@ -1,5 +1,10 @@
 const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("desktop", {
+  connections: {
+    status: () => ipcRenderer.invoke("market:credentials", {method:"status"}),
+    save: (data) => ipcRenderer.invoke("market:credentials", {method:"save",data}),
+    test: (provider) => ipcRenderer.invoke("market:credentials", {method:"test",data:provider}),
+  },
   market: {
     info: () =>
       ipcRenderer.invoke("market:request", { method: "info", args: [] }),

@@ -1,4 +1,4 @@
-import { Asset, Quote } from "../core/index.mjs";
+import { Asset, Quote } from "../../core/index.mjs";
 // Fixed illustrative snapshot; never presented as current market data.
 const seed = [
   {

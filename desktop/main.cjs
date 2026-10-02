@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, safeStorage } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs/promises");
 const { pathToFileURL } = require("node:url");
@@ -62,15 +62,15 @@ ipcMain.handle("workspace:export", async (event, data) => {
   return true;
 });
 app.whenReady().then(async () => {
-  const { createMarketBackend, createMarketHandler } =
-    await import("./market-data.mjs");
-  const backend = createMarketBackend({
-    MARKET_DATA_PROVIDER: process.env.MARKET_DATA_PROVIDER,
-    TWELVE_DATA_API_KEY: process.env.TWELVE_DATA_API_KEY,
-    BRAPI_API_KEY: process.env.BRAPI_API_KEY,
-    MARKET_DATA_DEBUG: process.env.MARKET_DATA_DEBUG,
+  const { createConnections } = await import("./connections.mjs");
+  const connections = await createConnections({
+    directory: app.getPath("userData"), encryption: safeStorage, trusted,
+    env: { MARKET_DATA_PROVIDER:process.env.MARKET_DATA_PROVIDER,
+      TWELVE_DATA_API_KEY:process.env.TWELVE_DATA_API_KEY,
+      BRAPI_API_KEY:process.env.BRAPI_API_KEY, MARKET_DATA_DEBUG:process.env.MARKET_DATA_DEBUG },
   });
-  ipcMain.handle("market:request", createMarketHandler(backend, trusted));
+  ipcMain.handle("market:request", connections.market);
+  ipcMain.handle("market:credentials", connections.credentials);
   createWindow();
 });
 app.on("window-all-closed", () => {

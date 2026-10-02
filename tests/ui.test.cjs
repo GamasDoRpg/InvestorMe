@@ -12,7 +12,7 @@ before(async () => {
   if (process.platform === "linux") args.push("--ozone-platform=headless");
   // Root containers cannot use Chromium's OS sandbox. Production startup never sets this flag.
   if (process.getuid?.() === 0) args.push("--no-sandbox");
-  app = await electron.launch({ args, env: { ...process.env, MARKET_DATA_PROVIDER: "mock", TWELVE_DATA_API_KEY: "" } });
+  app = await electron.launch({ args, env: { ...process.env, MARKET_DATA_PROVIDER: "disabled", TWELVE_DATA_API_KEY: "", BRAPI_API_KEY: "" } });
   page = await app.firstWindow();
   page.on("pageerror", (err) => errors.push(err.message));
   await page.waitForSelector("h1");
@@ -24,7 +24,7 @@ after(async () => {
 const click = (action) =>
   page.locator(`[data-action="${action}"]`).first().click();
 const fill = (name, value) => page.locator(`[name="${name}"]`).fill(value);
-const save = () => page.locator('button[type="submit"]').click();
+const save = () => page.locator('#modal button[type="submit"]').click();
 async function navigate(id) {
   const lab = ["strategies", "models", "scripts", "backtests"];
   const portfolio = [
@@ -47,6 +47,13 @@ async function navigate(id) {
   else await page.locator(`#navigation a[href="#${id}"]`).click();
   await page.waitForSelector(`main[data-page="${id}"]`);
 }
+
+test("Fresh workspace has no generated financial or laboratory data", async () => {
+ const result=await page.evaluate(()=>({prices:window.InvestorMeFinance.assets.map(a=>a.price),defaults:window.InvestorMeFinance.emptyWorkspace()}));
+ assert.ok(result.prices.every(p=>p===null));assert.equal(result.defaults.cash,0);
+ for(const field of ['holdings','strategies','models','backtests','alerts','watchlist']) assert.deepEqual(result.defaults[field],[]);
+ assert.equal(await page.locator('svg[aria-label*="fictícios"]').count(),0);
+});
 
 test("Every page renders without horizontal window overflow at desktop sizes", async () => {
   for (const width of [1480, 1024]) {
@@ -85,6 +92,9 @@ test("Portfolio CRUD validates duplicates, cancels safely and persists after rel
   await save();
   assert.match(await page.locator("table").textContent(), /BBDC4/);
   await click("add-holding");
+  await page.locator('[name="ticker"]').selectOption("BBDC4");
+  await fill("quantity", "1");
+  await fill("cost", "10");
   await save();
   assert.match(await page.locator(".form-error").textContent(), /já está/);
   await click("close-modal");
@@ -124,7 +134,7 @@ test("Search, watchlist and market filters respond", async () => {
     "Carteira / Gestão de risco",
   );
 });
-test("Strategy creation, pause, backtest validation and demo history", async () => {
+test("Strategy creation, pause and backtest configuration without invented execution", async () => {
   await navigate("strategies");
   await click("add-strategy");
   await fill("name", "Estratégia de teste");
@@ -140,6 +150,7 @@ test("Strategy creation, pause, backtest validation and demo history", async () 
     /Ativa/,
   );
   await click("strategy-backtest");
+  await fill("capital", "10000");
   await fill("start", "2025-01-01");
   await fill("end", "2024-01-01");
   await save();
@@ -159,22 +170,18 @@ test("Strategy creation, pause, backtest validation and demo history", async () 
   );
   await click("close-modal");
 });
-test("Models and alerts can be configured and simulated", async () => {
+test("Models and alerts can be configured without simulated training", async () => {
   await navigate("models");
   await click("add-model");
   await fill("name", "Modelo de teste");
   await save();
-  await click("train-model");
-  await page.waitForSelector("dialog:not([open])", { state: "attached" });
-  assert.doesNotMatch(
-    await page.locator(".details").textContent(),
-    /Ainda não executada/,
-  );
+  assert.equal(await page.locator('[data-action="train-model"]').count(),0);
+  assert.match(await page.locator(".details").textContent(), /Não executado/);
   await navigate("alerts");
   await click("add-alert");
   await fill("value", "50");
   await save();
-  assert.ok((await page.locator("tbody tr").count()) > 3);
+  assert.ok((await page.locator("tbody tr").count()) > 0);
   await click("read-alerts");
   assert.equal(await page.locator(".nav-count").count(), 0);
   const toggle = page.locator('[data-action="toggle-alert"]').first();
@@ -226,7 +233,20 @@ test("Theme, preferences, export and reset confirmation work", async () => {
   assert.deepEqual(errors, []);
 });
 
+async function seedUserRecords() {
+  await page.evaluate(() => {
+    const key="investorme.workspace.v1";
+    const value=JSON.parse(localStorage.getItem(key));
+    value.holdings=[{id:"user-position",ticker:"PETR4",quantity:10,cost:20}];
+    value.strategies=[{id:"user-strategy",name:"Minha estratégia",type:"Momentum",universe:"Ações brasileiras",status:"paused",rule:"Minha regra",limit:5}];
+    value.models=[{id:"user-model",name:"Meu modelo",type:"Random Forest",status:"draft"}];
+    localStorage.setItem(key,JSON.stringify(value));
+  });
+  await page.reload(); await page.waitForSelector("h1");
+}
+
 test("Page layouts support resize, reorder, visibility, customization and persistence", async () => {
+  await seedUserRecords();
   const edit = () => page.locator('[data-layout="edit"]').click();
   await navigate("overview");
   await edit();
@@ -488,7 +508,8 @@ test("Browser preview loads core modules under the existing CSP", async () => {
     });
     await page.waitForSelector("h1");
     assert.equal(await page.locator("h1").textContent(), "Visão geral");
-    assert.match(await page.locator(".stats").textContent(), /41\.655/);
+    assert.doesNotMatch(await page.locator(".stats").textContent(), /41\.655/);
+    assert.equal(await page.evaluate(() => window.InvestorMeFinance.assets.every(a => a.price === null)), true);
     assert.deepEqual(errors, []);
   } finally {
     await app.evaluate(async ({ BrowserWindow }, url) => {
@@ -498,36 +519,80 @@ test("Browser preview loads core modules under the existing CSP", async () => {
   }
 });
 
-test("Market provider UI shows mock freshness, daily history and safe IPC", async () => {
+test("Disconnected UI has no prices, fake history or unsafe IPC", async () => {
   await navigate("markets");
-  assert.match(await page.locator('.market-status').textContent(), /Mock Provider/);
+  assert.match(await page.locator('.market-status').textContent(), /Sem conexão/);
+  assert.equal(await page.evaluate(() => window.InvestorMeFinance.assets.every(a=>a.price===null)),true);
   await page.locator('#market-search').fill('AAPL');
-  assert.match(await page.locator('tbody').textContent(), /Demo/);
-  await click('market-search');
-  await page.waitForFunction(() => JSON.parse(localStorage.getItem('investorme.workspace.v1')).marketAssets?.length > 0);
-  await click('asset');
-  await click('market-history');
-  await page.waitForFunction(() => document.querySelector('#modal-title').textContent.includes('Histórico diário'));
-  assert.ok(await page.locator('#modal-content tbody tr').count());
-  assert.match(await page.locator('#modal-content').textContent(), /Dados demonstrativos/);
+  await click('asset'); await click('market-history');
+  assert.equal(await page.locator('#modal-content table').count(),0);
   await click('close-modal');
-  const result = await page.evaluate(() => window.desktop.market.getQuote({ url: 'https://evil.test' }));
-  assert.equal(result.ok, false); assert.equal(result.error.code, 'INVALID_REQUEST');
-  const security = await app.evaluate(({ BrowserWindow }) => {
-    const prefs = BrowserWindow.getAllWindows()[0].webContents.getLastWebPreferences();
-    return { sandbox: prefs.sandbox, nodeIntegration: prefs.nodeIntegration, contextIsolation: prefs.contextIsolation };
+  const result=await page.evaluate(()=>window.desktop.market.getQuote({url:'https://evil.test'}));
+  assert.equal(result.ok,false); assert.equal(result.error.code,'INVALID_REQUEST');
+  const security=await app.evaluate(({BrowserWindow})=>{
+    const p=BrowserWindow.getAllWindows()[0].webContents.getLastWebPreferences();
+    return {sandbox:p.sandbox,nodeIntegration:p.nodeIntegration,contextIsolation:p.contextIsolation};
   });
-  assert.deepEqual(security, { sandbox: true, nodeIntegration: false, contextIsolation: true });
-  assert.equal(await page.evaluate(() => typeof window.process), 'undefined');
-  assert.equal(await page.evaluate(() => document.querySelector('meta[http-equiv="Content-Security-Policy"]').content.includes("connect-src 'none'")), true);
-  assert.deepEqual(errors, []);
+  assert.deepEqual(security,{sandbox:true,nodeIntegration:false,contextIsolation:true});
+  assert.equal(await page.evaluate(()=>typeof window.process),'undefined');
+  assert.deepEqual(errors,[]);
 });
 
-test("External UI uses normalized IPC quotes, labels age and retains snapshots on failure", async () => {
+test("Account configures both APIs, tests connections and never exposes saved keys", async () => {
+ await app.evaluate(() => {
+  globalThis.__originalInvestorFetch=globalThis.fetch;
+  globalThis.fetch=async (url,options)=>{
+   if(options.headers.Authorization?.includes('invalid')) return new Response('{}',{status:401});
+   if(url.hostname==='brapi.dev') return new Response(JSON.stringify({results:[{
+    symbol:url.searchParams.get('symbols'),requestedSymbol:url.searchParams.get('symbols'),changed:false,
+    data:{currency:'BRL',regularMarketPrice:40,regularMarketPreviousClose:32,regularMarketTime:'2026-10-01T15:00:00Z'},
+   }]}));
+   const symbols=url.searchParams.get('symbol').split(',');
+   const row=s=>({symbol:s.split(':')[0],exchange:s.split(':')[1],currency:'USD',close:'100',previous_close:'80',timestamp:1735848000});
+   return new Response(JSON.stringify(symbols.length===1 ? row(symbols[0]) : Object.fromEntries(symbols.map(s=>[s,row(s)]))));
+  };
+ });
+ try {
+  await navigate('settings');
+  await page.locator('[name="brapiKey"]').fill('brapi-test-key');
+  await page.locator('[name="twelveKey"]').fill('twelve-test-key');
+  await page.locator('#market-connections button[type="submit"]').click();
+  await page.waitForFunction(()=>window.InvestorMeFinance.assets.find(a=>a.ticker==='AAPL').price===100 && !window.InvestorMeFinance.status().refreshing);
+  assert.equal(await page.locator('[name="brapiKey"]').inputValue(),'');
+  assert.equal(await page.locator('[name="twelveKey"]').inputValue(),'');
+  assert.equal(await page.evaluate(()=>JSON.stringify(localStorage).includes('test-key')),false);
+  const keyFile=await readFile(path.join(userData,'market-connections.json'),'utf8');assert.equal(keyFile.includes('test-key'),false);
+  await page.locator('[data-action="test-connection"][data-id="brapi"]').click();
+  await page.waitForFunction(()=>document.querySelector('[data-provider-status="brapi"]').textContent.includes('Conectado'));
+  await page.locator('[data-action="test-connection"][data-id="twelve"]').click();
+  await page.waitForFunction(()=>document.querySelector('[data-provider-status="twelve"]').textContent.includes('Conectado'));
+  await page.reload(); await page.waitForSelector('#market-connections');
+  assert.match(await page.locator('[name="twelveKey"]').getAttribute('placeholder'),/configurada/);
+  assert.equal(await page.locator('[name="twelveKey"]').inputValue(),'');
+  await page.locator('[name="twelveKey"]').fill('invalid-key');
+  await page.locator('#market-connections button[type="submit"]').click();
+  await page.waitForFunction(()=>window.InvestorMeFinance.status().problems.some(p=>p.includes('AUTH_ERROR')) && !window.InvestorMeFinance.status().refreshing);
+  assert.equal(await page.evaluate(()=>window.InvestorMeFinance.assets.find(a=>a.ticker==='AAPL').price),null);
+  await page.locator('[data-action="test-connection"][data-id="twelve"]').click();
+  await page.waitForFunction(()=>document.querySelector('[data-provider-status="twelve"]').textContent.includes('inválida'));
+  await page.locator('[data-action="remove-key"][data-id="twelve"]').click();
+  await page.waitForFunction(()=>!window.InvestorMeFinance.connectionStatus().hasTwelveKey && !window.InvestorMeFinance.status().refreshing);
+  await click('disconnect-market');
+  await page.waitForFunction(()=>window.InvestorMeFinance.status().provider==='disabled');
+  assert.equal(await page.evaluate(()=>window.InvestorMeFinance.assets.every(a=>a.price===null)),true);
+  assert.deepEqual(errors,[]);
+ } finally {
+  await page.evaluate(()=>window.desktop.connections.save({mode:'disabled',brapiKey:'',twelveKey:''}));
+  await app.evaluate(()=>{globalThis.fetch=globalThis.__originalInvestorFetch;delete globalThis.__originalInvestorFetch;});
+  await page.reload();await page.waitForSelector('h1');
+ }
+});
+
+test("External UI uses normalized IPC quotes and removes unavailable prices on failure", async () => {
   await navigate("portfolio");
   await click("cash");
   await save();
-  const { demoMarket } = await import("../providers/mock-data.mjs");
+  const { demoMarket } = await import("./fixtures/mock-data.mjs");
   // Only this isolated test process replaces IPC responses; production validates
   // them through createMarketHandler, covered above and in market-data.test.mjs.
   async function install(mode) {
@@ -535,8 +600,8 @@ test("External UI uses normalized IPC quotes, labels age and retains snapshots o
       ipcMain.removeHandler('market:request');
       ipcMain.handle('market:request', async (_event, { method, args }) => {
         if (method === 'info') return { ok: true, data: {
-          provider: mode === 'restore' ? 'mock' : 'twelve', demo: mode === 'restore',
-          label: mode === 'restore' ? 'Mock Provider · dados demonstrativos' : 'Twelve Data · B3: fim de dia; EUA: conforme plano', notice: null,
+          provider: mode === 'restore' ? 'disabled' : 'twelve', demo: false,
+          label: mode === 'restore' ? 'Sem conexão com provedores' : 'Twelve Data · B3: fim de dia; EUA: conforme plano', notice: null,
         } };
         if (mode === 'fail') return { ok: false, error: { code: 'NO_NETWORK' } };
         if (method !== 'getQuotes') return { ok: false, error: { code: 'INVALID_REQUEST' } };
@@ -567,7 +632,7 @@ test("External UI uses normalized IPC quotes, labels age and retains snapshots o
     await click('market-refresh');
     await page.waitForFunction(() => window.InvestorMeFinance.status().problems.length > 0);
     assert.match(await page.locator('.market-status').textContent(), /NO_NETWORK/);
-    assert.equal(await page.evaluate(() => window.InvestorMeFinance.evaluate(JSON.parse(localStorage.getItem('investorme.workspace.v1'))).marketValue), totalBefore);
+    assert.equal(await page.evaluate(() => window.InvestorMeFinance.evaluate(JSON.parse(localStorage.getItem('investorme.workspace.v1'))).marketValue), null);
     assert.deepEqual(errors, []);
   } finally {
     await install('restore');
@@ -577,13 +642,13 @@ test("External UI uses normalized IPC quotes, labels age and retains snapshots o
 });
 
 test("brapi sandbox UI keeps available Brazilian quotes despite token-only asset failures", async () => {
-  const { demoMarket } = await import('../providers/mock-data.mjs');
+  const { demoMarket } = await import('./fixtures/mock-data.mjs');
   async function install(restore=false) {
     await app.evaluate(({ipcMain}, {restore, fixtures}) => {
       ipcMain.removeHandler('market:request');
       ipcMain.handle('market:request', async (_event,{method,args}) => {
         if(method==='info') return {ok:true,data:restore
-          ? {provider:'mock',demo:true,label:'Mock Provider · dados demonstrativos',notice:null}
+          ? {provider:'disabled',demo:false,label:'Sem conexão com provedores',notice:null}
           : {provider:'brapi',demo:false,quoteBatchSize:1,label:'brapi · ações brasileiras',notice:'B3: atraso aproximado de 30 min. Sem token: PETR4, VALE3, ITUB4 e MGLU3.'}};
         if(method!=='getQuotes') return {ok:false,error:{code:'UNSUPPORTED'}};
         if(!restore && args[0].some(a=>!['PETR4','VALE3','ITUB4','MGLU3'].includes(a.symbol))) return {ok:false,error:{code:'AUTH_ERROR'}};

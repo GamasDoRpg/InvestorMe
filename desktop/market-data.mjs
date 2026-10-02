@@ -9,18 +9,18 @@ import {
   validateHistory,
   validateQuery,
 } from "../core/market-data/contract.mjs";
-import { MockMarketDataProvider } from "../providers/MockMarketDataProvider.mjs";
+import { UnavailableMarketDataProvider } from "../providers/UnavailableMarketDataProvider.mjs";
 import { TwelveDataProvider } from "../providers/TwelveDataProvider.mjs";
 import { BrapiProvider } from "../providers/BrapiProvider.mjs";
 import { RoutedMarketDataProvider } from "../providers/RoutedMarketDataProvider.mjs";
 const baseInfo = {
-  provider: "mock",
-  demo: true,
-  label: "Mock Provider · dados demonstrativos",
+  provider: "disabled",
+  demo: false,
+  label: "Sem conexão com provedores",
   notice: null,
 };
 export function createMarketBackend(env = {}, dependencies = {}) {
-  const selected = env.MARKET_DATA_PROVIDER || "mock";
+  const selected = env.MARKET_DATA_PROVIDER || "disabled";
   const logger =
     dependencies.logger ||
     (env.MARKET_DATA_DEBUG === "1"
@@ -50,18 +50,18 @@ export function createMarketBackend(env = {}, dependencies = {}) {
       provider: "twelve",
       demo: false,
       label: "Twelve Data · B3: fim de dia; EUA: conforme plano",
-      notice: null,
+      notice: "Chave configurada. Acesso às cotações conforme seu plano.",
     };
   } else {
-    provider = new MockMarketDataProvider();
+    provider = new UnavailableMarketDataProvider();
     info = {
       ...baseInfo,
       notice:
         selected === "twelve"
-          ? "AUTH_ERROR: chave ausente; modo demonstrativo ativo."
-          : selected !== "mock"
-            ? "INVALID_REQUEST: provider desconhecido; modo demonstrativo ativo."
-            : null,
+          ? "Chave Twelve Data ausente. Configure sua conta."
+          : selected !== "disabled"
+            ? "Provedor indisponível. Configure sua conta."
+            : "Adicione suas chaves na conta para receber cotações.",
     };
   }
   try {
