@@ -2049,3 +2049,7 @@ progress {
 .connections-panel .detail-actions { flex-wrap: wrap; }
 .allocation-total { padding: 24px; text-align: center; }
 .allocation-total strong, .allocation-total small { display: block; }
+
+/* Bundled company marks keep their original colors in both themes. */
+.asset-logo { position: relative; overflow: hidden; flex-shrink: 0; font-size: 8px; }
+.asset-logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #fff; }

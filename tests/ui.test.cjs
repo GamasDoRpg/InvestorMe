@@ -55,6 +55,26 @@ test("Fresh workspace has no generated financial or laboratory data", async () =
  assert.equal(await page.locator('svg[aria-label*="fictícios"]').count(),0);
 });
 
+test("Company logos load locally in both themes and degrade to a ticker", async () => {
+  await navigate("markets");
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+    await page.waitForFunction(() => {
+      const images = [...document.querySelectorAll("main .asset-logo img")];
+      return images.length === 9 && images.every(img => img.complete && img.naturalWidth > 0 && img.src.startsWith("file:"));
+    });
+  }
+  assert.equal(await page.evaluate(() => window.InvestorMeFinance.assetLogo({exchange:"NYSE", symbol:"AAPL"})), null);
+  const logo = page.locator("main .asset-logo").first();
+  const ticker = await logo.locator("span").textContent();
+  await logo.locator("img").dispatchEvent("error");
+  assert.equal(await logo.locator("img").count(), 0);
+  assert.equal(await logo.textContent(), ticker);
+  assert.equal(await logo.getAttribute("title"), "Logo indisponível");
+  await navigate("overview");
+  assert.deepEqual(errors, []);
+});
+
 test("Every page renders without horizontal window overflow at desktop sizes", async () => {
   for (const width of [1480, 1024]) {
     await page.setViewportSize({ width, height: 900 });
@@ -499,6 +519,8 @@ test("Browser preview loads core modules under the existing CSP", async () => {
       server.once("exit", code => { clearTimeout(timer); reject(new Error(`Preview exited: ${code}`)); });
       server.stdout.once("data", () => { clearTimeout(timer); resolve(); });
     });
+    const logoResponse = await fetch("http://127.0.0.1:4179/assets/companies/petrobras.svg");
+    assert.equal(logoResponse.headers.get("content-type"), "image/svg+xml");
     const response = await fetch("http://127.0.0.1:4179/core/index.mjs");
     assert.match(response.headers.get("content-type"), /javascript/);
     assert.match(await response.text(), /Portfolio/);
@@ -510,6 +532,11 @@ test("Browser preview loads core modules under the existing CSP", async () => {
     assert.equal(await page.locator("h1").textContent(), "Visão geral");
     assert.doesNotMatch(await page.locator(".stats").textContent(), /41\.655/);
     assert.equal(await page.evaluate(() => window.InvestorMeFinance.assets.every(a => a.price === null)), true);
+    await page.evaluate(() => location.hash = "#markets");
+    await page.waitForFunction(() => {
+      const images = [...document.querySelectorAll("main .asset-logo img")];
+      return images.length === 9 && images.every(img => img.complete && img.naturalWidth > 0);
+    });
     assert.deepEqual(errors, []);
   } finally {
     await app.evaluate(async ({ BrowserWindow }, url) => {

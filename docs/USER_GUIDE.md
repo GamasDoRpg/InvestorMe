@@ -51,7 +51,7 @@ Sem token brapi, o adaptador permite consultar PETR4, VALE3, ITUB4 e MGLU3. Outr
 - Ao falhar uma atualização, as cotações afetadas são removidas. Respostas reais ainda dentro do cache podem ser reutilizadas; atualizar não força uma chamada nova a cada clique.
 - O horário vem do provedor. O aviso de cotação antiga não determina se a bolsa está aberta.
 
-Não existem mais preços de demonstração ou resultados de treinamento/backtest fabricados no aplicativo. O catálogo inicial contém apenas nomes e identificadores de ativos reais.
+Não existem mais preços de demonstração ou resultados de treinamento/backtest fabricados no aplicativo. O catálogo inicial contém nomes e identificadores de ativos reais. As nove empresas iniciais também têm logos reais incluídos localmente, disponíveis sem internet. Ativos encontrados na busca sem logo cadastrado mostram o ticker; o mesmo ocorre se uma imagem não puder ser carregada.
 
 ## Páginas e recursos
 
