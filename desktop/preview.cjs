@@ -7,8 +7,7 @@ const roots = {
   providers: path.resolve(__dirname, "../providers"),
 };
 const publicProviders = new Set([
-  "/providers/MockMarketDataProvider.mjs",
-  "/providers/mock-data.mjs",
+  "/providers/UnavailableMarketDataProvider.mjs",
 ]);
 http
   .createServer((req, res) => {

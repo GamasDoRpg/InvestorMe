@@ -4,7 +4,7 @@ import { BrapiProvider, brapiSymbol } from '../providers/BrapiProvider.mjs';
 import { BrapiHttpClient } from '../providers/http.mjs';
 import { MarketDataService } from '../core/market-data/MarketDataService.mjs';
 import { createMarketBackend, createMarketHandler } from '../desktop/market-data.mjs';
-import { demoMarket } from '../providers/mock-data.mjs';
+import { demoMarket } from './fixtures/mock-data.mjs';
 import { Quote, Candle } from '../core/index.mjs';
 const petr = demoMarket.find(r => r.asset.symbol === 'PETR4').asset;
 const vale = demoMarket.find(r => r.asset.symbol === 'VALE3').asset;

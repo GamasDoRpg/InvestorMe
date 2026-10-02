@@ -229,7 +229,7 @@ test("Decimal arithmetic avoids common binary artifacts without rounding to cent
   assert.throws(() => multiply(Number.MAX_VALUE, 2), DomainError);
   assert.throws(() => multiply(Number.MIN_VALUE, 0.1), DomainError);
 });
-test("Legacy workspace adapter preserves records and reproduces demo totals", () => {
+test("Workspace adapter preserves records and leaves unknown market values unavailable", () => {
   const workspace = {
     cash: 8400,
     holdings: [
@@ -243,9 +243,9 @@ test("Legacy workspace adapter preserves records and reproduces demo totals", ()
   const before = JSON.stringify(workspace),
     r = evaluate(workspace);
   assert.equal(r.investedCapital, 29010);
-  assert.equal(r.marketValue, 33255);
-  assert.equal(r.totalEquity, 41655);
-  assert.equal(r.unrealizedPL, 4245);
+  assert.equal(r.marketValue, null);
+  assert.equal(r.totalEquity, null);
+  assert.equal(r.unrealizedPL, null);
   assert.equal(JSON.stringify(workspace), before);
   assert.ok(position(workspace.holdings[0]) instanceof Position);
   assert.equal(assets.find((a) => a.ticker === "AAPL").currency, "USD");

@@ -120,7 +120,7 @@ function positions() {
 }
 function performance() {
   return (
-    heading("Desempenho") + panel("Evolução ilustrativa", chart(), periods())
+    heading("Desempenho") + panel("Evolução da carteira", chart(), periods())
   );
 }
 function allocationPage() {

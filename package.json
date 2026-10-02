@@ -31,7 +31,8 @@
       "desktop/icon.png",
       "core/**/*.mjs",
       "desktop/market-data.mjs",
-      "providers/**/*.mjs"
+      "providers/**/*.mjs",
+      "desktop/connections.mjs"
     ],
     "win": {
       "target": [

@@ -1,12 +1,12 @@
-import { Candle } from "../core/index.mjs";
+import { Candle } from "../../core/index.mjs";
 import {
   MarketDataProvider,
   validateAsset,
   validateAssets,
   validateHistory,
   validateQuery,
-} from "../core/market-data/contract.mjs";
-import { MarketDataError } from "../core/market-data/errors.mjs";
+} from "../../core/market-data/contract.mjs";
+import { MarketDataError } from "../../core/market-data/errors.mjs";
 import { demoMarket } from "./mock-data.mjs";
 export class MockMarketDataProvider extends MarketDataProvider {
   async getQuote(asset) {

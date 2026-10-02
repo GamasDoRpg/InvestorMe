@@ -1,22 +1,25 @@
 import { Asset, Position, Portfolio, DomainError } from "../core/index.mjs";
 import { validateAsset } from "../core/market-data/contract.mjs";
 import { MarketDataService } from "../core/market-data/MarketDataService.mjs";
-import { MockMarketDataProvider } from "../providers/MockMarketDataProvider.mjs";
-import { demoMarket } from "../providers/mock-data.mjs";
+import { UnavailableMarketDataProvider } from "../providers/UnavailableMarketDataProvider.mjs";
+import { catalog } from "../core/market/catalog.mjs";
+export { emptyWorkspace, migrateWorkspace } from "./workspace.mjs";
 import { RemoteMarketDataProvider } from "./RemoteMarketDataProvider.mjs";
 import {
   MarketDataError,
   normalizeError,
 } from "../core/market-data/errors.mjs";
 export { DomainError };
-let service = new MarketDataService(new MockMarketDataProvider());
+export { initializeConnections, connectionStatus, saveConnections, testConnection } from "./connections.mjs";
+let service = new MarketDataService(new UnavailableMarketDataProvider());
 let info = {
-  provider: "mock",
-  demo: true,
-  label: "Mock Provider · dados demonstrativos",
-  notice: null,
+  provider: "disabled",
+  demo: false,
+  label: "Sem conexão com provedores",
+  notice: "Configure suas chaves na conta. A prévia web não acessa provedores.",
 };
-let quotes = await service.getQuotes(demoMarket.map((row) => row.asset));
+let quotes = new Map();
+let generation = 0;
 let brazilService = null;
 let searchService = service;
 let problems = [],
@@ -47,7 +50,7 @@ function register(asset, color = "blue") {
   assets.push(facade);
   return facade;
 }
-demoMarket.forEach(({ asset, color }) => register(asset, color));
+catalog.forEach(asset => register(asset));
 export function restoreAssets(records) {
   if (records === undefined) return;
   if (!Array.isArray(records) || records.length > 100)
@@ -56,7 +59,14 @@ export function restoreAssets(records) {
   restored.forEach((asset) => register(asset));
 }
 export async function initialize(bridge) {
-  if (!bridge) return;
+  generation++;
+  quotes = new Map();
+  problems = [];
+  refreshing = false;
+  brazilService = null;
+  service = new MarketDataService(new UnavailableMarketDataProvider());
+  searchService = service;
+  if (!bridge) { info = {provider:"disabled", demo:false, label:"Sem conexão com provedores", notice:"Configure suas chaves no aplicativo desktop."}; return; }
   const remote = new RemoteMarketDataProvider(bridge);
   let timer;
   try {
@@ -78,7 +88,8 @@ export async function initialize(bridge) {
   } catch {
     info = {
       ...info,
-      notice: "PROVIDER_ERROR: conexão indisponível; modo demonstrativo ativo.",
+      provider: "disabled", demo: false, label: "Sem conexão com provedores",
+      notice: "Conexão indisponível. Nenhum preço foi carregado.",
     };
   } finally {
     clearTimeout(timer);
@@ -94,12 +105,11 @@ export function status() {
   };
 }
 export function modeLabel() {
-  return info.demo
-    ? "Dados demonstrativos"
-    : "Cotações externas · conforme plano";
+  return info.provider === "disabled" ? "Cotações indisponíveis" : "Cotações dos provedores";
 }
 export async function refresh() {
-  if (refreshing) return;
+  if (refreshing || info.provider === "disabled") return;
+  const current = generation;
   refreshing = true;
   problems = [];
   try {
@@ -112,18 +122,24 @@ export async function refresh() {
       [...groups].map(async ([exchange, list]) => {
         const batchSize = info.quoteBatchSize === 1 && exchange === "B3" ? 1 : 50;
         for (let i = 0; i < list.length; i += batchSize) {
+          if (generation !== current) return;
           try {
-            for (const [id, quote] of await (exchange === "B3" && brazilService ? brazilService : service).getQuotes(list.slice(i, i + batchSize))) quotes.set(id, quote);
+            for (const [id, quote] of await (exchange === "B3" && brazilService ? brazilService : service).getQuotes(list.slice(i, i + batchSize))) {
+              if (generation === current) quotes.set(id, quote);
+            }
           } catch (error) {
             const safe = normalizeError(error);
+            if (generation !== current) return;
+            // Failed refreshes must not continue displaying a last known price.
+            list.slice(i, i + batchSize).forEach(asset => quotes.delete(asset.id));
             problems.push(`${exchange} (${list.slice(i, i + batchSize).map(a => a.symbol).join(", ")}): ${safe.code} — ${safe.message}`);
-            if (safe.code === "RATE_LIMIT") break;
+            if (safe.code === "RATE_LIMIT") { list.slice(i).forEach(asset => quotes.delete(asset.id)); break; }
           }
         }
       }),
     );
   } finally {
-    refreshing = false;
+    if (generation === current) refreshing = false;
   }
 }
 export async function searchAssets(query) {

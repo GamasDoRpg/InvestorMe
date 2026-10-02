@@ -8,11 +8,11 @@ import {
 import { MarketDataError } from "../core/market-data/errors.mjs";
 import { MemoryCache } from "../core/market-data/MemoryCache.mjs";
 import { MarketDataService } from "../core/market-data/MarketDataService.mjs";
-import { MockMarketDataProvider } from "../providers/MockMarketDataProvider.mjs";
+import { MockMarketDataProvider } from "./fixtures/MockMarketDataProvider.mjs";
 import { TwelveDataProvider } from "../providers/TwelveDataProvider.mjs";
 import { TwelveHttpClient } from "../providers/http.mjs";
 import { twelveSymbol, twelveAsset } from "../providers/symbols.mjs";
-import { demoMarket } from "../providers/mock-data.mjs";
+import { demoMarket } from "./fixtures/mock-data.mjs";
 import {
   createMarketBackend,
   createMarketHandler,
@@ -471,14 +471,14 @@ test("Safe logs/errors contain only status and timing, never keys or raw failure
   assert.ok(events.some((e) => typeof e.durationMs === "number"));
   assert.equal(JSON.stringify(events).includes(secret), false);
 });
-test("Configuration defaults to offline mock, explicitly labels missing-key fallback", () => {
-  assert.equal(createMarketBackend().info.demo, true);
+test("Configuration defaults to unavailable and never falls back to fake data", () => {
+  assert.equal(createMarketBackend().info.provider, "disabled");
   const missing = createMarketBackend({ MARKET_DATA_PROVIDER: "twelve" });
-  assert.equal(missing.info.demo, true);
-  assert.match(missing.info.notice, /AUTH_ERROR/);
+  assert.equal(missing.info.demo, false);
+  assert.match(missing.info.notice, /chave.*ausente/i);
   assert.match(
     createMarketBackend({ MARKET_DATA_PROVIDER: "typo" }).info.notice,
-    /INVALID_REQUEST/,
+    /indisponível/i,
   );
   const live = createMarketBackend({
     MARKET_DATA_PROVIDER: "twelve",
@@ -506,7 +506,7 @@ test("IPC rejects untrusted senders, arbitrary operations, oversized requests an
     assert.equal((await handle(event, request)).ok, false);
 });
 test("IPC serializes values; renderer adapter reconstructs Core objects for every operation", async () => {
-  const handle = createMarketHandler(createMarketBackend(), () => true);
+  const handle = createMarketHandler({service:new MarketDataService(mock), info:{provider:"fixture",demo:false}}, () => true);
   const bridge = Object.fromEntries(
     ["info", "getQuote", "getQuotes", "getHistory", "searchAssets"].map(
       (method) => [
@@ -517,7 +517,7 @@ test("IPC serializes values; renderer adapter reconstructs Core objects for ever
     ),
   );
   const remote = new RemoteMarketDataProvider(bridge);
-  assert.equal((await remote.info()).demo, true);
+  assert.equal((await remote.info()).demo, false);
   assert.ok((await remote.getQuote(aapl)) instanceof Quote);
   assert.ok(
     (await remote.getQuotes([aapl, msft])).get(msft.id) instanceof Quote,

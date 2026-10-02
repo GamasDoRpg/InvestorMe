@@ -39,7 +39,7 @@ const layoutWidgetIds = {
     "stress",
   ],
   alerts: ["active", "unread", "delivery", "rules"],
-  settings: ["profile", "appearance", "notifications", "data"],
+  settings: ["connections", "profile", "appearance", "notifications", "data"],
 };
 let layoutEditingPage = null;
 let layoutCatalog = [];

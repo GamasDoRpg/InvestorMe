@@ -2042,3 +2042,10 @@ progress {
   max-width: 320px;
   margin-bottom: 20px;
 }
+
+.connections-panel { margin-bottom: 24px; }
+.connection-provider { padding: 16px 0; border-bottom: 1px solid var(--border); }
+.connections-panel input { width: 100%; }
+.connections-panel .detail-actions { flex-wrap: wrap; }
+.allocation-total { padding: 24px; text-align: center; }
+.allocation-total strong, .allocation-total small { display: block; }
