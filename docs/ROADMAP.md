@@ -2,7 +2,7 @@
 
 [Documentation index](../README.md) · [Architecture](ARCHITECTURE.md) · [Long-term vision](VISION.md)
 
-Reviewed against the code on 2026-10-02. A checked item means its stated implementation exists; it does not certify live provider access, production readiness or completion of a broader engine. These stages are technical work areas, not release dates.
+Reviewed against the code on 2026-10-04. A checked item means its stated implementation exists; it does not certify live provider access, production readiness or completion of a broader engine. These stages are technical work areas, not release dates.
 
 ## Foundation and financial core — implemented scope
 
@@ -25,7 +25,8 @@ Reviewed against the code on 2026-10-02. A checked item means its stated impleme
 - [x] Twelve Data adapter for supported B3/NASDAQ/NYSE mappings, subject to entitlement.
 - [x] brapi adapter for supported B3 quotes/search/daily history.
 - [x] Combined B3/US routing with independent quote-service cooldowns.
-- [x] Account UI for saving/testing/removing keys and disconnecting.
+- [x] Compact masked key list with +/add-provider flow, automatic testing, visible verification status and connection controls.
+- [x] Company logos for discovered supported stocks via fixed public image sources, with ticker fallback.
 - [x] OS-protected key storage or explicit session-only behavior.
 - [x] Quote timestamps, unavailable states and removal of fake application data.
 - [x] Daily asset history access and controlled HTTP/IPC tests.

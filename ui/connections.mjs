@@ -37,5 +37,6 @@ export async function testConnection(provider) {
   const response=await call("test",provider);
   tests[provider]=`Conectado · ${response.symbol} · cotação de ${new Date(response.timestamp).toLocaleString("pt-BR")}`;
  } catch(error) {tests[provider]=error.message;}
+ try {status=await call("status");} catch {status={...status,health:{}};}
  return tests[provider];
 }

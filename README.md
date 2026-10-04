@@ -2,7 +2,7 @@
 
 InvestorMe is an experimental desktop application for local portfolio tracking and investment research. It has an independent financial core, configurable brapi/Twelve Data integrations and a customizable Portuguese interface. The long-term goal is a reproducible research platform with strategy evaluation and probabilistic models.
 
-**Current state: v0.1.0, reviewed on 2026-10-02.** The app starts empty. It does not generate fallback prices, portfolio charts, model predictions or backtest results. Missing market values display `—`; known user-entered cash and invested capital remain available. A zero-valued empty portfolio is not a market quote.
+**Current state: v0.1.0, reviewed on 2026-10-04.** The app starts empty. It does not generate fallback prices, portfolio charts, model predictions or backtest results. Missing market values display `—`; known user-entered cash and invested capital remain available. A zero-valued empty portfolio is not a market quote.
 
 ## Run
 
@@ -13,7 +13,7 @@ npm ci
 npm start
 ```
 
-To receive data, open the profile gear → **Conta e configurações → Conexões de mercado**, select the providers, paste your own keys and click **Salvar e conectar**. Then use **Testar conexão salva** for each provider. Settings apply without restarting. API access, delay and quota depend on your accounts; saving a key alone does not confirm access.
+To receive data, open the profile gear → **Conta e configurações → Chaves de API**, click **+ → Adicionar chave**, choose a provider and paste its key. **Salvar e testar** applies it and checks the connection. Saved entries stay masked and show verification status. Settings apply without restarting. API access, delay and quota depend on your accounts; saving a key alone does not confirm access.
 
 For source updates, close the app and update/download the repository again; downloading an old ZIP does not update automatically. Run `npm ci` in the updated folder before starting. Do not clear local application data to update. There is no in-app updater.
 
@@ -54,13 +54,13 @@ npm run dist:win
 
 Run these as separate tasks: `preview` starts a long-running server at `http://127.0.0.1:4173`. The browser preview is disconnected and has no credential configuration; use `npm start` for providers.
 
-The last code validation passed syntax checks and **62 automated tests**, including real Electron UI interaction with controlled HTTP responses. It did not verify authenticated access to live provider accounts. The [development guide](docs/DEVELOPMENT.md) explains the test boundaries and build process.
+The last code validation passed syntax checks and **63 automated tests**, including real Electron UI interaction with controlled HTTP responses. It did not verify authenticated access to live provider accounts. The [development guide](docs/DEVELOPMENT.md) explains the test boundaries and build process.
 
 The Windows build creates unsigned NSIS installer and portable executables in `release/`. The **Desktop preview** workflow runs checks/tests and then packages Windows, uploading `InvestorMe-Windows-x64` artifacts. It does not automatically publish a GitHub Release. A successful local test run is not proof that a Windows artifact was generated.
 
 ## Interface references
 
-The current UI uses local topographic textures with dark, light and system modes. The nine catalog companies have locally bundled real logos; discovered assets without a logo mapping display their ticker. [Logo sources](ui/assets/companies/README.md) are recorded separately. [Background provenance](ui/assets/README.md) describes the assets. The [initial mockups](assets/FirstInterfaceModel/readme.md) and screenshots below are historical visual references; their displayed example data is not loaded by the current app.
+The current UI uses local topographic textures with dark, light and system modes. The nine catalog companies have locally bundled real logos; additional B3/NASDAQ/NYSE stocks automatically request logos from fixed public internet sources, falling back to the ticker if unavailable. [Logo sources](ui/assets/companies/README.md) are recorded separately. [Background provenance](ui/assets/README.md) describes the assets. The [initial mockups](assets/FirstInterfaceModel/readme.md) and screenshots below are historical visual references; their displayed example data is not loaded by the current app.
 
 ![Historical dark interface reference](assets/desktop-preview-dark.jpg)
 

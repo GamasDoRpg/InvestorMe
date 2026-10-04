@@ -1,5 +1,5 @@
 // Presentation metadata only. Never infer brand identity from ticker prefixes
-// or load provider-supplied image URLs into the renderer.
+// or load provider-supplied image URLs into the renderer. Remote sources are fixed.
 const companies = Object.freeze({
   "B3:PETR4": "petrobras",
   "B3:VALE3": "vale",
@@ -13,7 +13,12 @@ const companies = Object.freeze({
 });
 export function assetLogo(asset) {
   const key = `${asset.exchange}:${asset.symbol}`;
-  return Object.hasOwn(companies, key)
-    ? new URL(`./assets/companies/${companies[key]}.svg`, import.meta.url).href
-    : null;
+  if (Object.hasOwn(companies, key))
+    return new URL(`./assets/companies/${companies[key]}.svg`, import.meta.url).href;
+  if (typeof asset.symbol !== "string" || !/^[A-Z0-9][A-Z0-9.-]{0,23}$/.test(asset.symbol)) return null;
+  if (asset.exchange === "B3")
+    return `https://icons.brapi.dev/icons/${encodeURIComponent(asset.symbol)}.svg`;
+  if (["NASDAQ", "NYSE"].includes(asset.exchange))
+    return `https://raw.githubusercontent.com/nvstly/icons/main/ticker_icons/${encodeURIComponent(asset.symbol)}.png`;
+  return null;
 }
