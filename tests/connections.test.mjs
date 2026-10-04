@@ -50,6 +50,9 @@ test('credential IPC uses fixed probes, rejects untrusted senders and switches p
  const event={trusted:true};
  assert.equal((await c.credentials(event,{method:'save',data:{mode:'combined',brapiKey:'br-key',twelveKey:'us-key'}})).ok,true);
  for(const p of ['brapi','twelve']) assert.equal((await c.credentials(event,{method:'test',data:p})).ok,true);
+ const status=(await c.credentials(event,{method:'status'})).data;
+ assert.equal(status.health.brapi.ok,true);assert.equal(status.health.twelve.ok,true);
+ assert.ok(Number.isFinite(status.health.brapi.checkedAt));
  assert.deepEqual(calls.map(c=>c.auth),['Bearer br-key','apikey us-key']);
  assert.equal((await c.credentials(event,{method:'test',data:'https://evil.test'})).ok,false);
  assert.ok(!JSON.stringify(await c.credentials(event,{method:'status'})).includes('us-key'));
@@ -66,6 +69,9 @@ test('credential tests report auth failure safely and stale requests cannot rest
  await new Promise(r=>setTimeout(r,0));await c.credentials({}, {method:'save',data:{mode:'disabled',twelveKey:''}});release();
  assert.equal((await pending).error.code,'PROVIDER_ERROR');
  assert.equal((await c.credentials({}, {method:'test',data:'twelve'})).error.code,'AUTH_ERROR');
+ assert.equal((await c.credentials({}, {method:'status'})).data.health.twelve.ok,false);
+ await c.credentials({}, {method:'save',data:{twelveKey:'replacement'}});
+ assert.equal((await c.credentials({}, {method:'status'})).data.health.twelve,undefined);
 });
 test('workspace starts empty and migration strips exact examples while preserving user edits and scripts',()=>{
  const empty=emptyWorkspace();assert.equal(empty.cash,0);for(const field of ['holdings','strategies','models','alerts','backtests','watchlist'])assert.deepEqual(empty[field],[]);

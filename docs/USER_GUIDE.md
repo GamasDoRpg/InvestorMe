@@ -2,7 +2,7 @@
 
 [Índice da documentação](../README.md) · [Dados de mercado](MARKET_DATA.md) · [Roadmap](ROADMAP.md)
 
-Este guia descreve a versão atual do código, revisada em 02/10/2026. A interface está em português. “Conta” reúne preferências locais e chaves de provedores: não é uma conta de login do InvestorMe nem uma conexão com corretora.
+Este guia descreve a versão atual do código, revisada em 04/10/2026. A interface está em português. “Conta” reúne preferências locais e chaves de provedores: não é uma conta de login do InvestorMe nem uma conexão com corretora.
 
 ## Abrir o aplicativo
 
@@ -20,22 +20,16 @@ Se você já usa uma versão anterior, feche o programa, atualize os arquivos do
 Obtenha as chaves nas suas contas dos provedores. O InvestorMe não cria contas, compra planos nem fornece uma chave compartilhada. Não publique suas chaves em issues, capturas de tela ou commits.
 
 1. Clique no perfil/engrenagem no rodapé da barra lateral.
-2. Em **Conta e configurações**, encontre **Conexões de mercado**.
-3. Selecione **Brasil: brapi · EUA: Twelve Data** para usar ambos, ou escolha somente um provedor.
-4. Cole cada chave no campo correspondente.
-5. Clique em **Salvar e conectar**. O aplicativo aplica a configuração e solicita cotações.
-6. Clique em **Testar conexão salva** de cada provedor. O teste consulta PETR4 para brapi e AAPL para Twelve Data.
-7. Em **Mercados**, consulte os valores recebidos, a origem, o horário e eventuais erros.
+2. Em **Conta e configurações → Chaves de API**, clique em **+ → Adicionar chave**.
+3. Selecione **brapi** ou **Twelve Data** e cole a chave.
+4. Clique em **Salvar e testar**. A chave aparece na lista como `••••••••••••`, sem revelar o conteúdo.
+5. Repita para o outro provedor. O modo combinado é selecionado automaticamente quando os dois têm chave.
 
-O teste usa a chave já salva; digitar uma nova chave sem salvar não muda a credencial testada. Uma resposta “Conectado” comprova aquela consulta naquele momento, não acesso a todos os ativos ou ao histórico. Consultas, testes e salvamentos que atualizam cotações podem consumir a cota da API.
+Cada linha oferece **Testar**, **Editar** e **Remover**. Editar exige uma nova chave; o segredo anterior não volta para a interface. Há uma chave por provedor: adicionar novamente substitui a anterior. **Conectar/Desconectar** controla as consultas gerais e mantém as chaves salvas. **Usar brapi sem chave** mantém o acesso público aos símbolos permitidos quando não há credenciais.
 
-| Ação | Efeito |
-| --- | --- |
-| Salvar com campo de chave vazio | Mantém a chave já configurada. |
-| Remover chave | Apaga a credencial daquele provedor. Na brapi, símbolos públicos podem continuar disponíveis sem token. |
-| Desconectar | Para as consultas normais e limpa as cotações exibidas; conserva as chaves para reconexão. |
-| Testar conexão salva | Faz uma consulta explícita, inclusive se a conexão geral estiver desativada. |
-| Limpar workspace | Remove registros/preferências após confirmação; não remove as chaves. |
+O indicador usa texto e cor: **Verificando…**, **Funcionando**, **Acesso parcial**, **Falha na conexão/consulta**, **Desconectada** ou **Não verificada**. Verde exige uma consulta de teste bem-sucedida recente (PETR4/AAPL). O horário do último teste fica disponível; após cinco minutos, a confirmação deixa de ser tratada como recente. A atualização visual não faz consultas periódicas. Falhas observadas nas cotações também aparecem na linha. O status sobrevive ao recarregamento da interface dentro da sessão, mas precisa ser verificado novamente após reiniciar o aplicativo.
+
+Um teste bem-sucedido comprova aquela consulta naquele momento, não acesso a todos os ativos ou ao histórico. Salvar e testar pode consumir cota da API. O teste usa a chave salva. **Remover** apaga a credencial; símbolos públicos da brapi podem continuar acessíveis sem token. **Limpar workspace** não apaga as chaves.
 
 As chaves ficam fora do workspace e da exportação JSON, protegidas pelo sistema operacional. Se essa proteção não estiver disponível, a tela informa que elas valem apenas para a sessão: será preciso digitá-las novamente ao reabrir o app. As chaves salvas não reaparecem nos campos.
 
@@ -51,7 +45,7 @@ Sem token brapi, o adaptador permite consultar PETR4, VALE3, ITUB4 e MGLU3. Outr
 - Ao falhar uma atualização, as cotações afetadas são removidas. Respostas reais ainda dentro do cache podem ser reutilizadas; atualizar não força uma chamada nova a cada clique.
 - O horário vem do provedor. O aviso de cotação antiga não determina se a bolsa está aberta.
 
-Não existem mais preços de demonstração ou resultados de treinamento/backtest fabricados no aplicativo. O catálogo inicial contém nomes e identificadores de ativos reais. As nove empresas iniciais também têm logos reais incluídos localmente, disponíveis sem internet. Ativos encontrados na busca sem logo cadastrado mostram o ticker; o mesmo ocorre se uma imagem não puder ser carregada.
+Não existem mais preços de demonstração ou resultados de treinamento/backtest fabricados no aplicativo. O catálogo inicial contém nomes e identificadores de ativos reais. As nove empresas iniciais também têm logos reais incluídos localmente, disponíveis sem internet. Para outros ativos B3, NASDAQ e NYSE, o aplicativo busca automaticamente o logo pela internet (brapi/NVSTly). As imagens não exigem chave de API. Se não houver imagem na fonte, a conexão falhar ou o mercado não for suportado, mostra o ticker. Os serviços de imagem recebem a solicitação do símbolo, sem a chave financeira ou o conteúdo da carteira.
 
 ## Páginas e recursos
 
@@ -93,7 +87,7 @@ Quando o armazenamento permite, a migração guarda uma cópia local do original
 | Sintoma | Verificação |
 | --- | --- |
 | A área de chaves não aparece | Confirme que abriu a versão atual pelo desktop, não uma pasta antiga ou a prévia web. Se ocultou o painel, use a personalização para mostrá-lo. |
-| Chave configurada, mas sem preços | Salve antes de testar; confira o modo selecionado, internet, permissões do ativo e limites do plano. Veja o erro na conta/Mercados. |
+| Chave configurada, mas sem preços | Confira a chave cadastrada, internet, permissões do ativo e limites do plano. Veja o erro na conta/Mercados. |
 | `AUTH_ERROR` | Chave ausente/inválida ou recurso fora do plano. No modo combinado, verifique cada provedor separadamente. |
 | `RATE_LIMIT` | Aguarde o prazo do provedor; repetir cliques não contorna a cota. |
 | `NO_NETWORK` / `TIMEOUT` | Verifique a conexão e tente mais tarde. Não há fallback fictício. |

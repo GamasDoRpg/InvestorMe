@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import path from "node:path";
 import { createMarketBackend, createMarketHandler } from "./market-data.mjs";
 import { catalog } from "../core/market/catalog.mjs";
-import { normalizeError } from "../core/market-data/errors.mjs";
+import { normalizeError, MarketDataError } from "../core/market-data/errors.mjs";
 const modes = ["disabled", "brapi", "twelve", "combined"];
 const keyFields = ["brapiKey", "twelveKey"];
 const blank = () => ({ mode:"disabled", brapiKey:"", twelveKey:"" });
@@ -60,6 +60,8 @@ export class ConnectionStore {
 export async function createConnections({directory,encryption,env={},trusted,dependencies={}}) {
  const store=new ConnectionStore({directory,encryption}); await store.load(env);
  let revision=0;
+ const health={};
+ const status=()=>({...store.status(),health:structuredClone(health)});
  const build=(config=store.current())=>createMarketBackend({MARKET_DATA_PROVIDER:config.mode,BRAPI_API_KEY:config.brapiKey,TWELVE_DATA_API_KEY:config.twelveKey,MARKET_DATA_DEBUG:env.MARKET_DATA_DEBUG},dependencies);
  let backend=build(), handler=createMarketHandler(backend,trusted);
  let testing=false;
@@ -71,22 +73,30 @@ export async function createConnections({directory,encryption,env={},trusted,dep
   credentials: async(event,request)=>{
    if(!trusted(event) || !request || typeof request!=="object" || Array.isArray(request) || Object.keys(request).some(k=>!["method","data"].includes(k))) return {ok:false,error:{code:"INVALID_REQUEST"}};
    try {
-    if(request.method==="status" && request.data===undefined) return {ok:true,data:store.status()};
+    if(request.method==="status" && request.data===undefined) return {ok:true,data:status()};
     if(request.method==="save") {
-     const status=await store.update(request.data);
+     await store.update(request.data);
+     for(const provider of ["brapi","twelve"]) if(Object.hasOwn(request.data,provider+"Key")) delete health[provider];
      backend=build(); handler=createMarketHandler(backend,trusted); revision++;
-     return {ok:true,data:status};
+     return {ok:true,data:status()};
     }
     if(request.method==="test" && ["brapi","twelve"].includes(request.data)) {
      if(testing) return {ok:false,error:{code:"RATE_LIMIT"}};
      testing=true;
+     const started=revision, provider=request.data;
      try {
       const config=store.current();
-      if(request.data==="twelve" && !config.twelveKey) return {ok:false,error:{code:"AUTH_ERROR"}};
-      const probe=build({...config,mode:request.data});
-      const asset=catalog.find(a=>a.symbol===(request.data==="brapi"?"PETR4":"AAPL"));
+      if(provider === "twelve" && !config.twelveKey) throw new MarketDataError("AUTH_ERROR");
+      const probe=build({...config,mode:provider});
+      const asset=catalog.find(a=>a.symbol===(provider === "brapi"?"PETR4":"AAPL"));
       const quote=await probe.service.getQuote(asset);
+      if(started !== revision) return {ok:false,error:{code:"PROVIDER_ERROR"}};
+      health[provider]={ok:true,checkedAt:Date.now()};
       return {ok:true,data:{symbol:asset.symbol,timestamp:quote.timestamp}};
+     } catch(error) {
+      const code=normalizeError(error).code;
+      if(started === revision) health[provider]={ok:false,code,checkedAt:Date.now()};
+      return {ok:false,error:{code}};
      } finally {testing=false;}
     }
     return {ok:false,error:{code:"INVALID_REQUEST"}};

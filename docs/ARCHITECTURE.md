@@ -2,7 +2,7 @@
 
 [Documentation index](../README.md) · [Market data](MARKET_DATA.md) · [Development](DEVELOPMENT.md)
 
-This document describes the implemented code, reviewed on 2026-10-02. Future research engines are described separately in [VISION.md](VISION.md).
+This document describes the implemented code, reviewed on 2026-10-04. Future research engines are described separately in [VISION.md](VISION.md).
 
 ## Modules and dependency direction
 
@@ -36,7 +36,7 @@ Implemented: independent `Asset`, `Quote`, `Candle`, `Position` and `Portfolio` 
 | `ui/app.js` | Rendering, interactions, formatting and localStorage persistence. Basic portfolio calculations delegate to the core. |
 | `desktop/` | Electron lifecycle, restricted native bridge and browser preview; no financial rules. |
 
-**Module compatibility.** The core uses native `.mjs` ES modules, without a bundler, framework, dependencies or a repository-wide module conversion. The Electron process remains CommonJS. `ui/bootstrap.mjs` loads the financial adapter first, exposes one read-only `window.InvestorMeFinance` bridge, then loads the existing classic `app.js`. This preserves the shared lexical scope used by `research.js` and `layouts.js`. The core itself creates no globals. The preview serves UI/core files and the explicitly allowed unavailable-provider module with the correct module MIME type; packaging includes `core/**/*.mjs`. The existing CSP, renderer sandbox and disabled Node integration are unchanged.
+**Module compatibility.** The core uses native `.mjs` ES modules, without a bundler, framework, dependencies or a repository-wide module conversion. The Electron process remains CommonJS. `ui/bootstrap.mjs` loads the financial adapter first, exposes one read-only `window.InvestorMeFinance` bridge, then loads the existing classic `app.js`. This preserves the shared lexical scope used by `research.js` and `layouts.js`. The core itself creates no globals. The preview serves UI/core files and the explicitly allowed unavailable-provider module with the correct module MIME type; packaging includes `core/**/*.mjs`. The renderer sandbox and disabled Node integration are preserved; CSP permits only the documented logo paths in addition to local images.
 
 **Domain contracts.** Assets require ID, symbol, exchange, name, currency and asset type; sector, market and country are optional. IDs distinguish exchanges; tickers alone are not portfolio quote keys. Asset types are extensible, including equities, ETFs and indices. Quotes accept epoch milliseconds or an ISO timestamp with a timezone and calculate changes from an optional previous close. Candles require a timestamp, interval and finite nonnegative OHLCV values, with coherent high/low bounds. Positions accept nonnegative quantities (including fractions) and average costs. Invalid inputs raise `DomainError`; validated objects and position arrays are immutable.
 
@@ -69,9 +69,9 @@ The migration retains version 1 and adds `dataRevision: 2`. Existing layout widg
 
 ## Electron and credential security
 
-The window runs with `contextIsolation: true`, `nodeIntegration: false` and `sandbox: true`. Its CSP includes `connect-src 'none'`. External navigation and new windows are denied. The main process checks the sender window, top frame and local application URL before privileged IPC.
+The window runs with `contextIsolation: true`, `nodeIntegration: false` and `sandbox: true`. Image loading additionally permits two fixed public logo paths (brapi and NVSTly on GitHub); remote image requests do not carry provider keys. Its CSP includes `connect-src 'none'`. External navigation and new windows are denied. The main process checks the sender window, top frame and local application URL before privileged IPC.
 
-`desktop.market` exposes only info, quote(s), history and search operations. `desktop.connections` exposes status, save and test. Credentials are entered in password inputs, sent to main through restricted IPC and cleared from the form; stored keys are never returned through status. Status reports mode, key-presence flags, secure-storage availability, persistence and warnings.
+`desktop.market` exposes only info, quote(s), history and search operations. `desktop.connections` exposes status, save and test. Credentials are entered in password inputs, sent to main through restricted IPC and cleared from the form; stored keys are never returned through status. Status reports mode, key-presence flags, secure-storage availability, persistence, warnings and in-memory probe health/timestamps. The UI uses a constant bullet mask; no secret characters are returned.
 
 Credential updates are validated and serialized, then written via a temporary file and rename. With OS encryption available, `safeStorage` encrypts the key object. Without it, including Linux's `basic_text` backend, only the selected mode is persisted and keys remain in memory for the session. These encrypted files are tied to the local OS account/environment, not portable credential backups. A corrupt or locked file is preserved until an explicit save replaces it.
 

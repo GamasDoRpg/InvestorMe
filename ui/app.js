@@ -128,7 +128,7 @@ async function refreshMarket() {
 }
 function assetCell(a) {
   const logo = finance.assetLogo(a);
-  return `<div class="asset-cell"><span class="asset-logo" title="${escapeHTML(logo ? a.name : "Logo indisponível")}" aria-hidden="true"><span>${escapeHTML(a.ticker)}</span>${logo ? `<img src="${escapeHTML(logo)}" alt="" width="30" height="30" decoding="async">` : ""}</span><div><strong>${escapeHTML(a.ticker)}</strong><small>${escapeHTML(a.name)}</small></div></div>`;
+  return `<div class="asset-cell"><span class="asset-logo" title="${escapeHTML(logo ? a.name : "Logo indisponível")}" aria-hidden="true"><span>${escapeHTML(a.ticker)}</span>${logo ? `<img class="${logo.startsWith("https://raw.githubusercontent.com/") ? "remote-us-logo" : ""}" src="${escapeHTML(logo)}" alt="" width="30" height="30" decoding="async" referrerpolicy="no-referrer">` : ""}</span><div><strong>${escapeHTML(a.ticker)}</strong><small>${escapeHTML(a.name)}</small></div></div>`;
 }
 // Keep a readable ticker if a bundled image is missing or fails to decode.
 // Capture is necessary because image error events do not bubble.
@@ -272,52 +272,61 @@ function alerts() {
   );
 }
 let connectionBusy = false;
+function keyMode(provider, present = true) {
+ const c=finance.connectionStatus();
+ const brapi=provider === "brapi" ? present : c.hasBrapiKey;
+ const twelve=provider === "twelve" ? present : c.hasTwelveKey;
+ return brapi && twelve ? "combined" : brapi ? "brapi" : twelve ? "twelve" : "disabled";
+}
 function connectionPanel() {
  const c=finance.connectionStatus();
- if(!c.available) return panel("Conexões de mercado", '<p>Abra o aplicativo desktop para configurar suas chaves e consultar os provedores.</p>');
- const mode=c.mode === "disabled" ? "combined" : (c.mode || "combined");
- const disabled=connectionBusy ? "disabled" : "";
- return panel("Conexões de mercado", `<form id="market-connections" autocomplete="off">
-  <p>Adicione as chaves das suas contas. Salvar aplica a conexão imediatamente.</p>
-  <label>Fontes de dados<select name="mode" ${disabled}>
-   ${[["combined","Brasil: brapi · EUA: Twelve Data"],["brapi","Somente brapi"],["twelve","Somente Twelve Data"]].map(([value,label])=>`<option value="${value}" ${mode===value?"selected":""}>${label}</option>`).join("")}
-  </select></label>
-  ${[["brapi","brapi · Brasil",c.hasBrapiKey],["twelve","Twelve Data · EUA",c.hasTwelveKey]].map(([provider,label,configured])=>`
-   <div class="connection-provider"><label>${label}<input type="password" name="${provider}Key" maxlength="512" autocomplete="new-password" spellcheck="false" ${disabled} placeholder="${configured?"Chave configurada — deixe vazio para manter":"Cole sua chave de API"}"></label>
-   <p>${configured?"Chave configurada":"Nenhuma chave configurada"}</p>
-   <div class="detail-actions">${button("Testar conexão salva", "test-connection", "",provider)}${button("Remover chave", "remove-key", "danger",provider)}</div>
-   <p role="status" data-provider-status="${provider}">${escapeHTML(c.tests[provider]||"")}</p></div>`).join("")}
-  <p class="panel-note">${c.secureStorage ? "Chaves salvas com a proteção do sistema operacional, fora do workspace." : "Proteção do sistema indisponível: as chaves serão usadas somente nesta sessão e não serão gravadas em disco."}</p>
-  ${c.warning?`<p role="alert">${escapeHTML(c.warning)}</p>`:""}
-  <p class="panel-note">brapi gratuita: atraso aproximado de 30 minutos. Sem token, apenas PETR4, VALE3, ITUB4 e MGLU3. Twelve Data: acesso conforme seu plano.</p>
-  <p class="connection-message" role="status">${escapeHTML(connectionBusy ? "Aplicando conexão…" : ([finance.status().notice,...finance.status().problems].filter(Boolean).join(" ")))}</p>
-  <div class="detail-actions"><button class="button primary" type="submit" ${disabled}>Salvar e conectar</button>${button("Desconectar", "disconnect-market")}</div>
- </form>`, "", "connections-panel");
+ if(!c.available) return panel("Chaves de API", '<p>Abra o aplicativo desktop para adicionar suas chaves.</p>');
+ const rows=[["brapi","brapi",c.hasBrapiKey],["twelve","Twelve Data",c.hasTwelveKey]].filter(x=>x[2]);
+ const content=rows.map(([provider,label])=>{
+  const active=c.mode === "combined" || c.mode === provider;
+  const health=c.health?.[provider];
+  const errors=finance.status().problems.filter(p=>provider === "brapi" ? p.startsWith("B3") : c.mode === "twelve" || !p.startsWith("B3"));
+  const fresh=health && Date.now()-health.checkedAt < 300000;
+  const checking=connectionBusy;
+  const kind=!active ? "idle" : checking ? "checking" : errors.length && health?.ok ? "partial" : errors.length || health?.ok === false ? "error" : health?.ok && fresh ? "ok" : "idle";
+  const labelStatus=!active ? "Desconectada" : checking ? "Verificando…" : errors.length ? (health?.ok ? "Acesso parcial" : "Falha na consulta") : health?.ok === false ? "Falha na conexão" : health?.ok && fresh ? "Funcionando" : "Não verificada";
+  const detail=errors[0] || c.tests[provider] || (health ? `Último teste: ${new Date(health.checkedAt).toLocaleString("pt-BR")}${health.ok ? "" : " · " + (health.code || "PROVIDER_ERROR")}` : "Teste a chave para verificar o acesso.");
+  return `<div class="api-key-row" data-key-provider="${provider}"><div><strong>${label}</strong><div class="key-mask" aria-label="Chave salva, conteúdo oculto">••••••••••••</div></div><div class="key-health"><span class="connection-indicator ${kind}" data-provider-status="${provider}" role="status">${labelStatus}</span><small>${escapeHTML(detail)}</small></div><div class="detail-actions">${button("Testar", "test-connection", "",provider)}${button("Editar", "edit-key", "",provider)}${button("Remover", "remove-key", "danger",provider)}</div></div>`;
+ }).join("");
+ return panel("Chaves de API", `<div id="market-connections">${content || '<p class="empty">Nenhuma chave adicionada.</p>'}<div class="key-footer">${(rows.length || c.mode !== "disabled") ? button(c.mode === "disabled" ? "Conectar" : "Desconectar",c.mode === "disabled" ? "connect-market" : "disconnect-market") : button("Usar brapi sem chave", "public-brapi") }<small>${c.secureStorage ? "Protegidas neste dispositivo" : "Somente nesta sessão"}</small></div>${c.warning?`<p role="alert">${escapeHTML(c.warning)}</p>`:""}</div>`, '<details class="key-add"><summary aria-label="Adicionar chave">+</summary>'+button("Adicionar chave", "add-key")+'</details>', "connections-panel");
 }
-async function applyConnections(patch) {
+// Expire the visible verification state without polling the provider or
+// interrupting an open editor/layout interaction.
+setInterval(() => {
+ if(page === "settings" && !connectionBusy && !$("#modal").open &&
+    (typeof layoutEditingPage === "undefined" || !layoutEditingPage)) render();
+}, 30000);
+function keyEditor(provider) {
+ if(connectionBusy) return;
+ openModal(provider ? "Editar chave" : "Adicionar chave", `<form id="connection-key" autocomplete="off"><div class="form-fields"><label>Provedor<select name="provider" ${provider ? "disabled" : ""}><option value="brapi" ${provider === "brapi" ? "selected" : ""}>brapi</option><option value="twelve" ${provider === "twelve" ? "selected" : ""}>Twelve Data</option></select></label><label>Chave da API<input name="apiKey" type="password" required maxlength="512" autocomplete="new-password" spellcheck="false" placeholder="Cole a chave do provedor"></label></div><p class="panel-note">${provider ? "A nova chave substitui a anterior." : "Uma chave por provedor. Adicionar novamente substitui a anterior."} Será testada ao salvar.</p><div class="modal-footer">${button("Cancelar", "close-modal")}<button type="submit" class="button primary">Salvar e testar</button></div></form>`);
+}
+async function applyConnections(patch, probe) {
  if(connectionBusy) return;
  connectionBusy=true;
  try {
   await finance.saveConnections(patch);
+  closeModal();
   await finance.initialize(window.desktop.market);
   render();
+  if(probe) await finance.testConnection(probe);
   await finance.refresh();
   toast("Configuração aplicada.");
  } catch(error) { toast(error.message); }
  finally { connectionBusy=false; render(); }
 }
 document.addEventListener("submit",async event=>{
- if(event.target.id!=="market-connections") return;
+ if(event.target.id!=="connection-key") return;
  event.preventDefault();
  if(connectionBusy) return;
- const f=event.target;
- const patch={mode:f.elements.mode.value};
- for(const key of ["brapiKey","twelveKey"]) {
-  const value=f.elements[key].value.trim();
-  if(value) patch[key]=value;
-  f.elements[key].value="";
- }
- await applyConnections(patch);
+ const f=event.target, provider=f.elements.provider.value, value=f.elements.apiKey.value.trim();
+ if(!value) return;
+ f.elements.apiKey.value="";
+ await applyConnections({mode:keyMode(provider),[provider+"Key"]:value},provider);
 });
 function settings() {
   return (
@@ -446,7 +455,7 @@ function openModal(title, content, wide = false) {
   previousFocus = document.activeElement;
   const d = $("#modal");
   $("#modal-content").innerHTML =
-    `<div class="modal-heading"><div><span class="eyebrow">INVESTORME · WORKSPACE DEMO</span><h2 id="modal-title">${title}</h2></div><button class="icon-button" data-action="close-modal" aria-label="Fechar janela">×</button></div>${content}`;
+    `<div class="modal-heading"><div><span class="eyebrow">INVESTORME · WORKSPACE</span><h2 id="modal-title">${title}</h2></div><button class="icon-button" data-action="close-modal" aria-label="Fechar janela">×</button></div>${content}`;
   d.classList.toggle("wide", wide);
   d.setAttribute("aria-labelledby", "modal-title");
   if (!d.open) d.showModal();
@@ -686,15 +695,19 @@ document.addEventListener("click", async (event) => {
     return;
   }
   switch (action) {
+    case "add-key": keyEditor(); break;
+    case "edit-key": keyEditor(id); break;
+    case "connect-market": await applyConnections({mode:keyMode()}); break;
+    case "public-brapi": await applyConnections({mode:"brapi"},"brapi"); break;
     case "test-connection":
       if(connectionBusy) break;
       connectionBusy=true;
-      el.disabled=true;
+      render();
       try { await finance.testConnection(id); }
       finally { connectionBusy=false; render(); }
       break;
     case "remove-key":
-      await applyConnections({[id+"Key"]:""});
+      await applyConnections({[id+"Key"]:"",mode:keyMode(id,false)});
       break;
     case "disconnect-market":
       await applyConnections({mode:"disabled"});

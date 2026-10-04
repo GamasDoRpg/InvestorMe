@@ -64,7 +64,7 @@ test("Company logos load locally in both themes and degrade to a ticker", async 
       return images.length === 9 && images.every(img => img.complete && img.naturalWidth > 0 && img.src.startsWith("file:"));
     });
   }
-  assert.equal(await page.evaluate(() => window.InvestorMeFinance.assetLogo({exchange:"NYSE", symbol:"AAPL"})), null);
+  assert.equal(await page.evaluate(() => window.InvestorMeFinance.assetLogo({exchange:"UNKNOWN", symbol:"AAPL"})), null);
   const logo = page.locator("main .asset-logo").first();
   const ticker = await logo.locator("span").textContent();
   await logo.locator("img").dispatchEvent("error");
@@ -73,6 +73,37 @@ test("Company logos load locally in both themes and degrade to a ticker", async 
   assert.equal(await logo.getAttribute("title"), "Logo indisponível");
   await navigate("overview");
   assert.deepEqual(errors, []);
+});
+
+test("Discovered stocks load remote logos through fixed sources without credentials", async () => {
+  const seen=[];
+  const svg=await readFile(path.join(process.cwd(),'ui/assets/companies/petrobras.svg'),'utf8');
+  await page.route('https://icons.brapi.dev/**', async route=>{
+    seen.push(route.request()); await route.fulfill({contentType:'image/svg+xml',body:svg});
+  });
+  await page.route('https://raw.githubusercontent.com/nvstly/icons/**',async route=>{
+    seen.push(route.request()); await route.fulfill({contentType:'image/svg+xml',body:svg});
+  });
+  try {
+    await page.evaluate(()=>window.InvestorMeFinance.restoreAssets([
+      {id:'B3:ABEV3',symbol:'ABEV3',exchange:'B3',name:'Ambev',currency:'BRL',assetType:'equity'},
+      {id:'NASDAQ:TSLA',symbol:'TSLA',exchange:'NASDAQ',name:'Tesla',currency:'USD',assetType:'equity'},
+    ]));
+    await navigate('markets');
+    await page.waitForFunction(()=>{
+      const imgs=[...document.querySelectorAll('.asset-logo img')].filter(i=>i.src.startsWith('https:'));
+      return imgs.length===2 && imgs.every(i=>i.complete && i.naturalWidth>0);
+    });
+    assert.ok(seen.some(r=>r.url()==='https://icons.brapi.dev/icons/ABEV3.svg'));
+    assert.ok(seen.some(r=>r.url()==='https://raw.githubusercontent.com/nvstly/icons/main/ticker_icons/TSLA.png'));
+    for(const r of seen){assert.equal(r.headers().authorization,undefined);assert.equal(r.headers().referer,undefined);}
+    assert.equal(await page.evaluate(()=>window.InvestorMeFinance.assetLogo({exchange:'B3',symbol:'../secret'})),null);
+  } finally {
+    await page.evaluate(()=>window.InvestorMeFinance.assets.splice(9));
+    await page.unroute('https://icons.brapi.dev/**');
+    await page.unroute('https://raw.githubusercontent.com/nvstly/icons/**');
+    await navigate('overview');
+  }
 });
 
 test("Every page renders without horizontal window overflow at desktop sizes", async () => {
@@ -581,27 +612,37 @@ test("Account configures both APIs, tests connections and never exposes saved ke
  });
  try {
   await navigate('settings');
-  await page.locator('[name="brapiKey"]').fill('brapi-test-key');
-  await page.locator('[name="twelveKey"]').fill('twelve-test-key');
-  await page.locator('#market-connections button[type="submit"]').click();
-  await page.waitForFunction(()=>window.InvestorMeFinance.assets.find(a=>a.ticker==='AAPL').price===100 && !window.InvestorMeFinance.status().refreshing);
-  assert.equal(await page.locator('[name="brapiKey"]').inputValue(),'');
-  assert.equal(await page.locator('[name="twelveKey"]').inputValue(),'');
+  async function addKey(provider,key) {
+    await page.locator('.key-add summary').click();
+    await click('add-key');
+    await page.locator('#connection-key [name="provider"]').selectOption(provider);
+    await page.locator('#connection-key [name="apiKey"]').fill(key);
+    await page.locator('#connection-key button[type="submit"]').click();
+    await page.waitForFunction(p=>document.querySelector(`[data-provider-status="${p}"]`)?.textContent === 'Funcionando',provider);
+  }
+  assert.equal(await page.locator('#market-connections input').count(),0);
+  await addKey('brapi','brapi-test-key');
+  await addKey('twelve','twelve-test-key');
+  assert.equal(await page.locator('.api-key-row').count(),2);
+  assert.equal(await page.locator('.key-mask').first().textContent(),'••••••••••••');
+  assert.equal(await page.locator('body').textContent().then(t=>t.includes('test-key')),false);
   assert.equal(await page.evaluate(()=>JSON.stringify(localStorage).includes('test-key')),false);
   const keyFile=await readFile(path.join(userData,'market-connections.json'),'utf8');assert.equal(keyFile.includes('test-key'),false);
   await page.locator('[data-action="test-connection"][data-id="brapi"]').click();
-  await page.waitForFunction(()=>document.querySelector('[data-provider-status="brapi"]').textContent.includes('Conectado'));
+  await page.waitForFunction(()=>document.querySelector('[data-provider-status="brapi"]').textContent.includes('Funcionando'));
   await page.locator('[data-action="test-connection"][data-id="twelve"]').click();
-  await page.waitForFunction(()=>document.querySelector('[data-provider-status="twelve"]').textContent.includes('Conectado'));
+  await page.waitForFunction(()=>document.querySelector('[data-provider-status="twelve"]').textContent.includes('Funcionando'));
   await page.reload(); await page.waitForSelector('#market-connections');
-  assert.match(await page.locator('[name="twelveKey"]').getAttribute('placeholder'),/configurada/);
-  assert.equal(await page.locator('[name="twelveKey"]').inputValue(),'');
-  await page.locator('[name="twelveKey"]').fill('invalid-key');
-  await page.locator('#market-connections button[type="submit"]').click();
+  assert.equal(await page.locator('.api-key-row').count(),2);
+  assert.equal(await page.locator('#market-connections input').count(),0);
+  await page.locator('[data-action="edit-key"][data-id="twelve"]').click();
+  assert.equal(await page.locator('[name="apiKey"]').inputValue(),'');
+  await page.locator('[name="apiKey"]').fill('invalid-key');
+  await page.locator('#connection-key button[type="submit"]').click();
   await page.waitForFunction(()=>window.InvestorMeFinance.status().problems.some(p=>p.includes('AUTH_ERROR')) && !window.InvestorMeFinance.status().refreshing);
   assert.equal(await page.evaluate(()=>window.InvestorMeFinance.assets.find(a=>a.ticker==='AAPL').price),null);
   await page.locator('[data-action="test-connection"][data-id="twelve"]').click();
-  await page.waitForFunction(()=>document.querySelector('[data-provider-status="twelve"]').textContent.includes('inválida'));
+  await page.waitForFunction(()=>document.querySelector('[data-provider-status="twelve"]').textContent.includes('Falha'));
   await page.locator('[data-action="remove-key"][data-id="twelve"]').click();
   await page.waitForFunction(()=>!window.InvestorMeFinance.connectionStatus().hasTwelveKey && !window.InvestorMeFinance.status().refreshing);
   await click('disconnect-market');

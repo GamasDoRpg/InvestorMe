@@ -2,7 +2,7 @@
 
 [Documentation index](../README.md) · [User guide](USER_GUIDE.md) · [Architecture](ARCHITECTURE.md)
 
-Implementation reviewed on 2026-10-02. Provider integrations exist; live access and entitlement are account-dependent.
+Implementation reviewed on 2026-10-04. Provider integrations exist; live access and entitlement are account-dependent.
 
 Market data is requested through `MarketDataService`, independently of vendors. Existing `Asset`, `Quote` and `Candle` classes are reused without changes.
 
@@ -56,13 +56,15 @@ Batching reduces HTTP calls but does not imply one credit for an entire batch. C
 
 Use the desktop app; no terminal configuration is required:
 
-1. Open the profile gear → **Conta e configurações** → **Conexões de mercado**.
-2. Select **Brasil: brapi · EUA: Twelve Data** (or one provider).
-3. Paste your personal brapi and Twelve Data API keys and click **Salvar e conectar**.
-4. Use **Testar conexão salva** for each provider to check authentication and a quote (PETR4/AAPL). A saved key alone does not confirm access.
-5. Open Markets and use **Atualizar cotações** as needed. Access, timestamps and quotas depend on your accounts.
+1. Open the profile gear → **Conta e configurações → Chaves de API**.
+2. Choose **+ → Adicionar chave**, select brapi or Twelve Data and paste the key.
+3. **Salvar e testar** applies the configuration and checks one quote (PETR4/AAPL).
+4. Add the other provider if needed; routing selects combined mode automatically when both keys exist.
+5. Saved rows show a constant bullet mask, status and **Testar/Editar/Remover** actions. **Conectar/Desconectar** controls normal queries.
 
-Saving changes providers immediately and clears previous connection caches; no restart is needed. Blank key fields preserve saved keys. **Remover chave** clears one credential; **Desconectar** stops normal quote queries and clears displayed quotes while retaining credentials for later use. A failed refresh removes affected prices; totals depending on those prices become unavailable. No mock fallback exists, even for missing keys or an unsupported provider setting.
+There is one credential per provider; adding it again replaces it. Existing saved keys load into the compact list without a credential-format migration. Empty replacement inputs cannot overwrite a saved key. A successful probe gives a green recent-verification status for five minutes, with the last check time; UI status expiry makes no new provider requests. The main process retains safe health metadata during the session, clears it on key replacement and rejects stale probe results from old configuration revisions. Quote failures can indicate partial access or failure. After restarting the process, credentials remain saved when OS protection is available, but verification starts unknown.
+
+Saving changes providers immediately and clears previous connection caches; no restart is needed. A failed refresh removes affected prices; totals depending on those prices become unavailable. No mock fallback exists. **Usar brapi sem chave** preserves explicit access to its public symbols without storing a token.
 
 `desktop/connections.mjs` stores credentials outside the workspace, encrypted through Electron `safeStorage` in the OS user-data directory. Status IPC returns key-presence flags and connection/storage metadata; saved secrets are never returned to the renderer, placed in localStorage, or included in JSON exports. Password inputs are cleared on submission. On Linux, the insecure `basic_text` backend is refused: without OS encryption, keys are session-only and the UI explains that they must be entered again after restarting. Corrupt/locked credential files are left intact until an explicit save replaces them.
 
@@ -114,10 +116,16 @@ The normal desktop path is the account panel. At startup, an existing `market-co
 
 When no saved file exists, `ConnectionStore` accepts an explicit supported mode. Without one, a Twelve Data key selects `combined`, a brapi-only key selects `brapi`, and no keys selects `disabled`. A direct call to `createMarketBackend()` itself defaults to disabled. `mock` is not an application provider mode.
 
-The `.env.example` file is documentation only: there is no dotenv loader. Do not paste secrets into source files or commit a populated environment file. **Testar conexão salva** checks the stored credentials, not unsaved text in the inputs. A successful probe verifies one symbol at that time, not every endpoint or market. Saving and testing can consume API quota. Removing a brapi key can still leave keyless public symbols accessible until you disconnect.
+The `.env.example` file is documentation only: there is no dotenv loader. Do not paste secrets into source files or commit a populated environment file. **Testar** checks the stored credentials, not unsaved text in the inputs. A successful probe verifies one symbol at that time, not every endpoint or market. Saving and testing can consume API quota. Removing a brapi key can still leave keyless public symbols accessible until you disconnect.
 
 ## Unavailable data behavior
 
 A missing quote displays `—`, not zero and not a generated value. Empty portfolios legitimately total zero; user-entered invested capital and cash remain known without market data. A failed refresh removes affected snapshots, and totals that depend on them become unavailable. Existing real responses may be reused within the cache TTL. Disconnecting clears quote snapshots immediately. A quote older than 60 seconds is marked as old; the app does not check exchange holidays or market-open status.
 
 History is currently shown as daily OHLCV for the selected asset; portfolio performance charts remain unavailable. Unsupported instruments, missing fields and impossible candles are rejected rather than repaired using invented numbers.
+
+## Company images
+
+The nine bundled company marks remain available offline. Other supported stock symbols generate image URLs from fixed sources: `https://icons.brapi.dev/icons/{ticker}.svg` for B3 and `https://raw.githubusercontent.com/nvstly/icons/main/ticker_icons/{ticker}.png` for NASDAQ/NYSE. Symbols are validated and URL-encoded. Sources are public and may omit or remove logos; missing images fall back to the ticker.
+
+The CSP allows image requests only to these added paths; `connect-src 'none'`, script policy and Electron isolation are unchanged. Images use `<img>` (never injected SVG markup) with no referrer. No financial API key is attached. Sources receive the image request and associated network metadata; their cache/availability is outside the app's control. See [image provenance](../ui/assets/companies/README.md).
